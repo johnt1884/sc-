@@ -2894,7 +2894,7 @@
                 const target = (selection && selection.targetProject) || "";
                 if (target && moveSelector.options.length <= 1) {
                     allProjectFolders.forEach(proj => {
-                        if (proj.path !== projectPath) {
+                        if (proj.path !== projectPath && !proj.path.includes('\\')) {
                             const opt = document.createElement("option");
                             opt.value = proj.path;
                             opt.textContent = (proj.isProject ? "" : "📁 ") + proj.name;
@@ -3013,7 +3013,7 @@
             moveSelect.addEventListener('mousedown', () => {
                 if (moveSelect.options.length > 1) return;
                 allProjectFolders.forEach(proj => {
-                    if (proj.path !== projectPath) {
+                    if (proj.path !== projectPath && !proj.path.includes('\\')) {
                         const opt = document.createElement('option');
                         opt.value = proj.path;
                         opt.textContent = (proj.isProject ? "" : "📁 ") + proj.name;
@@ -4654,14 +4654,18 @@
             }
 
             if (g_rootHandle) {
-                for (const project of projectFolders) {
+                const allFoldersToResolve = [...projectFolders, ...allDiscoveredFolders];
+                for (const folder of allFoldersToResolve) {
                     try {
-                        const relativePathParts = await g_rootHandle.resolve(project.handle);
+                        const relativePathParts = await g_rootHandle.resolve(folder.handle);
                         if (relativePathParts) {
-                            project.path = relativePathParts.join('\\');
+                            folder.path = relativePathParts.join('\\');
+                        } else {
+                            folder.path = "";
                         }
                     } catch (e) {
-                        console.warn(`Could not resolve path for ${project.name} relative to root.`);
+                        console.warn(`Could not resolve path for ${folder.name} relative to root.`);
+                        folder.path = "";
                     }
                 }
             }
@@ -4707,8 +4711,12 @@
                             const relativePathParts = await g_rootHandle.resolve(folder.handle);
                             if (relativePathParts) {
                                 folder.path = relativePathParts.join('\\');
+                            } else {
+                                folder.path = "";
                             }
-                        } catch (e) {}
+                        } catch (e) {
+                            folder.path = "";
+                        }
                     }
                 }
 
@@ -5371,8 +5379,12 @@
                             const relativePathParts = await g_rootHandle.resolve(folder.handle);
                             if (relativePathParts) {
                                 folder.path = relativePathParts.join('\\');
+                            } else {
+                                folder.path = "";
                             }
-                        } catch (e) {}
+                        } catch (e) {
+                            folder.path = "";
+                        }
                     }
                 }
 
