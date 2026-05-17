@@ -861,6 +861,10 @@
                         <input type="checkbox" id="enable-categories-panel-checkbox">
                         <label for="enable-categories-panel-checkbox">Categories</label>
                     </div>
+                    <div class="checkbox-container">
+                        <input type="checkbox" id="preserve-original-size-global-checkbox">
+                        <label for="preserve-original-size-global-checkbox">Preserve Original Size</label>
+                    </div>
                 </div>
                 <div class="top-bar-right">
                     <button id="shortcut-script-btn" class="bar-button">Generate Action Script</button>
@@ -937,6 +941,7 @@
                             <button id="editor-cutSegmentBtn" class="bar-button" style="background:#d32f2f;color:white" disabled>Cut Segment</button>
                             <button id="editor-cropBtn" class="bar-button" style="border-color:#43a047">Crop</button>
                             <button id="editor-deleteEditThumbsBtn" class="bar-button" style="border-color:#f44336">Delete Thumbnails</button>
+                            <button id="editor-preserveSizeBtn" class="bar-button" style="border-color:#009dff">Preserve Size</button>
                             <button id="editor-commitBtn" class="editor-greenBtn">Commit</button>
                         </div>
                         <div class="editor-control-group" style="justify-content:flex-end">
@@ -1029,6 +1034,7 @@
         const editorFileInfo = document.getElementById('editor-fileInfo');
         const editorFlipBtn = document.getElementById('editor-flipBtn');
         const editorDeleteEditThumbsBtn = document.getElementById('editor-deleteEditThumbsBtn');
+        const editorPreserveSizeBtn = document.getElementById('editor-preserveSizeBtn');
         const editorCropBtn = document.getElementById('editor-cropBtn');
         const editorCropBox = document.getElementById('editor-cropBox');
         const editorCropConfirm = document.getElementById('editor-cropConfirm');
@@ -1097,6 +1103,7 @@
         const showDatesCheckbox = document.getElementById('show-dates-checkbox');
         const showNumbersCheckbox = document.getElementById('show-numbers-checkbox');
         const enableCategoriesPanelCheckbox = document.getElementById('enable-categories-panel-checkbox');
+        const preserveOriginalSizeGlobalCheckbox = document.getElementById('preserve-original-size-global-checkbox');
         const categoriesPanel = document.getElementById('categories-panel');
         const panelResizer = document.getElementById('panel-resizer');
         const panelContent = document.getElementById('panel-content');
@@ -1905,9 +1912,15 @@
                         editorCurrentAppliedFlip = false;
                         editorCurrentAppliedRotation = 0;
                         editorDeleteEditThumbsFlag = false;
+                        editorPreserveOriginalSizeFlag = null;
                         if (editorDeleteEditThumbsBtn) {
                             editorDeleteEditThumbsBtn.classList.remove('active');
                             editorDeleteEditThumbsBtn.style.backgroundColor = '';
+                        }
+                        if (editorPreserveSizeBtn) {
+                            editorPreserveSizeBtn.classList.remove('active');
+                            editorPreserveSizeBtn.style.backgroundColor = '';
+                            editorPreserveSizeBtn.title = 'Preserve Original Size: Default';
                         }
                         editorCurrentCrop = null;
                         editorPendingCrop = null;
@@ -1946,6 +1959,7 @@
                 editorCurrentAppliedFlip = selection ? !!selection.editFlipped : false;
             }
             editorDeleteEditThumbsFlag = selection ? !!selection.deleteEditThumbnails : false;
+            editorPreserveOriginalSizeFlag = selection ? selection.preserveOriginalSize : null;
             editorCurrentCrop = selection ? (selection.crop || null) : null;
             editorPendingCrop = editorCurrentCrop;
             applyCropPreview();
@@ -1958,6 +1972,14 @@
             if (editorDeleteEditThumbsBtn) {
                 editorDeleteEditThumbsBtn.classList.toggle('active', editorDeleteEditThumbsFlag);
                 editorDeleteEditThumbsBtn.style.backgroundColor = editorDeleteEditThumbsFlag ? 'rgba(244, 67, 54, 0.3)' : '';
+            }
+
+            if (editorPreserveSizeBtn) {
+                const isActive = editorPreserveOriginalSizeFlag === true;
+                const isOverridden = editorPreserveOriginalSizeFlag !== null;
+                editorPreserveSizeBtn.classList.toggle('active', isActive);
+                editorPreserveSizeBtn.style.backgroundColor = isOverridden ? (isActive ? 'rgba(0, 157, 255, 0.6)' : 'rgba(150, 150, 150, 0.3)') : '';
+                editorPreserveSizeBtn.title = isOverridden ? (isActive ? 'Preserve Original Size: ON' : 'Preserve Original Size: OFF') : 'Preserve Original Size: Default';
             }
 
             if (editorCropBtn) {
@@ -2115,6 +2137,24 @@
                 };
             }
 
+            if (editorPreserveSizeBtn) {
+                editorPreserveSizeBtn.onclick = () => {
+                    if (editorPreserveOriginalSizeFlag === null) {
+                        editorPreserveOriginalSizeFlag = true;
+                    } else if (editorPreserveOriginalSizeFlag === true) {
+                        editorPreserveOriginalSizeFlag = false;
+                    } else {
+                        editorPreserveOriginalSizeFlag = null;
+                    }
+
+                    const isActive = editorPreserveOriginalSizeFlag === true;
+                    const isOverridden = editorPreserveOriginalSizeFlag !== null;
+                    editorPreserveSizeBtn.classList.toggle('active', isActive);
+                    editorPreserveSizeBtn.style.backgroundColor = isOverridden ? (isActive ? 'rgba(0, 157, 255, 0.6)' : 'rgba(150, 150, 150, 0.3)') : '';
+                    editorPreserveSizeBtn.title = isOverridden ? (isActive ? 'Preserve Original Size: ON' : 'Preserve Original Size: OFF') : 'Preserve Original Size: Default';
+                };
+            }
+
             editorTimeline.onmousedown = e => {
                 editorScrubbingMouseDown = true;
                 editorScrubToPosition(e.clientX);
@@ -2194,10 +2234,11 @@
                 selection.editFlipped = finalEditFlipped;
                 selection.crop = editorCurrentCrop;
                 selection.deleteEditThumbnails = editorDeleteEditThumbsFlag;
+                selection.preserveOriginalSize = editorPreserveOriginalSizeFlag;
                 selection.fps = editorEstimatedFPS;
                 
                 // Track if it was edited in edit mode
-                selection.editModeRotated = editChanged || editorDeleteEditThumbsFlag;
+                selection.editModeRotated = editChanged || editorDeleteEditThumbsFlag || (editorPreserveOriginalSizeFlag !== null);
 
                 // Update visual orientation for thumbnails if uniform and full-length (with no cuts)
                 if (isFullLength && !hasCuts) {
@@ -2338,6 +2379,15 @@
             }
 
             updateCircleColors();
+
+            // Load global preserve original size state
+            const preserveSizeGlobal = localStorage.getItem('preserveOriginalSizeGlobal') === 'true';
+            if (preserveOriginalSizeGlobalCheckbox) {
+                preserveOriginalSizeGlobalCheckbox.checked = preserveSizeGlobal;
+                preserveOriginalSizeGlobalCheckbox.addEventListener('change', () => {
+                    localStorage.setItem('preserveOriginalSizeGlobal', preserveOriginalSizeGlobalCheckbox.checked);
+                });
+            }
 
             // Load panel state
             const panelEnabled = localStorage.getItem('enableCategoriesPanel') === 'true';
@@ -3501,7 +3551,7 @@
                 '}',
                 '',
                 'function Process-Video {',
-                '    param([string]\$sourcePath, [string]\$targetPath, [array]\$cuts, [array]\$markers, [bool]\$flipped, [string]\$crop)',
+                '    param([string]\$sourcePath, [string]\$targetPath, [array]\$cuts, [array]\$markers, [bool]\$flipped, [string]\$crop, [bool]\$preserveOriginalSize)',
                 '    Write-Host "--- Processing Video: \$([System.IO.Path]::GetFileName(\$sourcePath)) ---" -ForegroundColor Cyan',
                 '    if (-not \$sourcePath -or -not (Test-Path -LiteralPath \$sourcePath)) { ',
                 '        Write-Host "Source path empty or invalid: \$sourcePath" -ForegroundColor Red',
@@ -3578,9 +3628,42 @@
                 '    \$hasAudio = (ffprobe -v error -select_streams a:0 -show_entries stream=index -of default=noprint_wrappers=1:nokey=1 -i "\$sourcePath") -ne \$null',
                 '    ',
                 '    # Determine target dimensions',
-                '    \$hasRotation = \$false',
-                '    foreach (\$seg in \$segments) { if (\$seg.rotation -eq 90 -or \$seg.rotation -eq 270) { \$hasRotation = \$true; break } }',
-                '    if (\$crop) { \$p = \$crop -split ":"; \$targetW = [int]\$p[0]; \$targetH = [int]\$p[1]; if (\$hasRotation) { \$tmp = \$targetW; \$targetW = \$targetH; \$targetH = \$tmp } } else { \$targetW = if (\$hasRotation) { \$sh } else { \$sw }; \$targetH = if (\$hasRotation) { \$sw } else { \$sh } }',
+                '    \$targetW = 0',
+                '    \$targetH = 0',
+                '    if (\$preserveOriginalSize) {',
+                '        \$maxTh = 0',
+                '        foreach (\$seg in \$segments) {',
+                '            \$th = 0',
+                '            if (\$crop) { \$p = \$crop -split ":"; \$th = [int]\$p[1] }',
+                '            else { \$th = if (\$seg.rotation -eq 90 -or \$seg.rotation -eq 270) { \$sw } else { \$sh } }',
+                '            if (\$th -gt \$maxTh) { \$maxTh = \$th }',
+                '        }',
+                '        \$targetH = \$maxTh',
+                '        \$maxTwScaled = 0',
+                '        foreach (\$seg in \$segments) {',
+                '            \$tw = 0; \$th = 0',
+                '            if (\$crop) { \$p = \$crop -split ":"; \$tw = [int]\$p[0]; \$th = [int]\$p[1] }',
+                '            else {',
+                '                \$tw = if (\$seg.rotation -eq 90 -or \$seg.rotation -eq 270) { \$sh } else { \$sw }',
+                '                \$th = if (\$seg.rotation -eq 90 -or \$seg.rotation -eq 270) { \$sw } else { \$sh }',
+                '            }',
+                '            \$twScaled = [Math]::Round(\$tw * \$targetH / \$th)',
+                '            if (\$twScaled -gt \$maxTwScaled) { \$maxTwScaled = \$twScaled }',
+                '        }',
+                '        \$targetW = \$maxTwScaled',
+                '    } else {',
+                '        \$hasRotation = \$false',
+                '        foreach (\$seg in \$segments) { if (\$seg.rotation -eq 90 -or \$seg.rotation -eq 270) { \$hasRotation = \$true; break } }',
+                '        if (\$crop) { ',
+                '            \$p = \$crop -split ":"',
+                '            \$targetW = [int]\$p[0]',
+                '            \$targetH = [int]\$p[1]',
+                '            if (\$hasRotation) { \$tmp = \$targetW; \$targetW = \$targetH; \$targetH = \$tmp }',
+                '        } else {',
+                '            \$targetW = if (\$hasRotation) { \$sh } else { \$sw }',
+                '            \$targetH = if (\$hasRotation) { \$sw } else { \$sh }',
+                '        }',
+                '    }',
                 '    \$targetW = [Math]::Ceiling(\$targetW / 2) * 2',
                 '    \$targetH = [Math]::Ceiling(\$targetH / 2) * 2',
                 '    ',
@@ -3911,7 +3994,9 @@
                     scriptLines.push(`    \\$processedVideoPath = (Join-Path -Path (Split-Path -Parent \$sourceVideoPath) -ChildPath ('processed_' + '${escapedVideoName}'))`);
                     const isFlipped = sel.editFlipped ? '\$true' : '\$false';
                     const cropArg = sel.crop ? `'${escapePSString(sel.crop)}'` : '\$null';
-                    scriptLines.push(`    Process-Video -sourcePath \$sourceVideoPath -targetPath \\$processedVideoPath -cuts \$cuts -markers \$markers -flipped ${isFlipped} -crop ${cropArg}`);
+                    const effectivePreserveSize = (sel.preserveOriginalSize !== null) ? sel.preserveOriginalSize : preserveOriginalSizeGlobalCheckbox.checked;
+                    const preserveSizeArg = effectivePreserveSize ? '\$true' : '\$false';
+                    scriptLines.push(`    Process-Video -sourcePath \$sourceVideoPath -targetPath \\$processedVideoPath -cuts \$cuts -markers \$markers -flipped ${isFlipped} -crop ${cropArg} -preserveOriginalSize ${preserveSizeArg}`);
                     scriptLines.push(`    if (Test-Path -LiteralPath \"\$processedVideoPath\") {`);
                     scriptLines.push(`        if (Test-Path -LiteralPath \"\\$sourceVideoPath\") { Remove-Item -LiteralPath \"\\$sourceVideoPath\" -Force }`);
                     scriptLines.push(`        Move-Item -LiteralPath \"\$processedVideoPath\" -Destination \"\\$sourceVideoPath\" -Force`);
@@ -4159,7 +4244,8 @@
                     if (hasSessionRotation) dataParts.push('edit_rotated:true');
                     if (hasSessionCuts) dataParts.push('has_cuts:true');
                     if (sel.crop) dataParts.push(`crop:${sel.crop}`);
-                    if (!hasSessionRotation && !hasSessionCuts && hasSessionOther && !sel.crop) dataParts.push('edit_rotated:true');
+                                    if (sel.preserveOriginalSize !== null) dataParts.push(`preserve_size:${sel.preserveOriginalSize}`);
+                                    if (!hasSessionRotation && !hasSessionCuts && hasSessionOther && !sel.crop && sel.preserveOriginalSize === null) dataParts.push('edit_rotated:true');
                 } else if (hasLoadedEdit) {
                     // Restore loaded flags if not overwritten by a session commit
                     const existing = editModeRotatedVideos.get(key);
@@ -4168,6 +4254,8 @@
                         if (existing.includes('cuts:') || existing.includes('has_cuts:true')) dataParts.push('has_cuts:true');
                         const cMatch = existing.match(/crop:([^|]+)/);
                         if (cMatch) dataParts.push(`crop:${cMatch[1]}`);
+                                    const psMatch = existing.match(/preserve_size:([^|]+)/);
+                                    if (psMatch) dataParts.push(`preserve_size:${psMatch[1]}`);
                     } else {
                         dataParts.push('edit_rotated:true');
                     }
@@ -4366,6 +4454,9 @@
                                 }
                 if (part.startsWith('crop:')) {
                     sel.crop = part.substring(5);
+                }
+                if (part.startsWith('preserve_size:')) {
+                    sel.preserveOriginalSize = (part.substring(14) === 'true');
                 }
                             }
                         });
