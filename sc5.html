@@ -1918,9 +1918,11 @@
                             editorDeleteEditThumbsBtn.style.backgroundColor = '';
                         }
                         if (editorPreserveSizeBtn) {
-                            editorPreserveSizeBtn.classList.remove('active');
-                            editorPreserveSizeBtn.style.backgroundColor = '';
-                            editorPreserveSizeBtn.title = 'Preserve Original Size: Default';
+                            const isActive = preserveOriginalSizeGlobalCheckbox.checked;
+                            editorPreserveOriginalSizeFlag = isActive;
+                            editorPreserveSizeBtn.classList.toggle('active', isActive);
+                            editorPreserveSizeBtn.style.backgroundColor = isActive ? 'rgba(0, 157, 255, 0.6)' : 'rgba(150, 150, 150, 0.3)';
+                            editorPreserveSizeBtn.title = isActive ? 'Preserve Original Size: ON' : 'Preserve Original Size: OFF';
                         }
                         editorCurrentCrop = null;
                         editorPendingCrop = null;
@@ -1959,7 +1961,9 @@
                 editorCurrentAppliedFlip = selection ? !!selection.editFlipped : false;
             }
             editorDeleteEditThumbsFlag = selection ? !!selection.deleteEditThumbnails : false;
-            editorPreserveOriginalSizeFlag = selection ? selection.preserveOriginalSize : null;
+            editorPreserveOriginalSizeFlag = (selection && selection.preserveOriginalSize !== undefined && selection.preserveOriginalSize !== null)
+                ? selection.preserveOriginalSize
+                : preserveOriginalSizeGlobalCheckbox.checked;
             editorCurrentCrop = selection ? (selection.crop || null) : null;
             editorPendingCrop = editorCurrentCrop;
             applyCropPreview();
@@ -1976,10 +1980,9 @@
 
             if (editorPreserveSizeBtn) {
                 const isActive = editorPreserveOriginalSizeFlag === true;
-                const isOverridden = editorPreserveOriginalSizeFlag !== null;
                 editorPreserveSizeBtn.classList.toggle('active', isActive);
-                editorPreserveSizeBtn.style.backgroundColor = isOverridden ? (isActive ? 'rgba(0, 157, 255, 0.6)' : 'rgba(150, 150, 150, 0.3)') : '';
-                editorPreserveSizeBtn.title = isOverridden ? (isActive ? 'Preserve Original Size: ON' : 'Preserve Original Size: OFF') : 'Preserve Original Size: Default';
+                editorPreserveSizeBtn.style.backgroundColor = isActive ? 'rgba(0, 157, 255, 0.6)' : 'rgba(150, 150, 150, 0.3)';
+                editorPreserveSizeBtn.title = isActive ? 'Preserve Original Size: ON' : 'Preserve Original Size: OFF';
             }
 
             if (editorCropBtn) {
@@ -2139,19 +2142,12 @@
 
             if (editorPreserveSizeBtn) {
                 editorPreserveSizeBtn.onclick = () => {
-                    if (editorPreserveOriginalSizeFlag === null) {
-                        editorPreserveOriginalSizeFlag = true;
-                    } else if (editorPreserveOriginalSizeFlag === true) {
-                        editorPreserveOriginalSizeFlag = false;
-                    } else {
-                        editorPreserveOriginalSizeFlag = null;
-                    }
+                    editorPreserveOriginalSizeFlag = !editorPreserveOriginalSizeFlag;
 
                     const isActive = editorPreserveOriginalSizeFlag === true;
-                    const isOverridden = editorPreserveOriginalSizeFlag !== null;
                     editorPreserveSizeBtn.classList.toggle('active', isActive);
-                    editorPreserveSizeBtn.style.backgroundColor = isOverridden ? (isActive ? 'rgba(0, 157, 255, 0.6)' : 'rgba(150, 150, 150, 0.3)') : '';
-                    editorPreserveSizeBtn.title = isOverridden ? (isActive ? 'Preserve Original Size: ON' : 'Preserve Original Size: OFF') : 'Preserve Original Size: Default';
+                    editorPreserveSizeBtn.style.backgroundColor = isActive ? 'rgba(0, 157, 255, 0.6)' : 'rgba(150, 150, 150, 0.3)';
+                    editorPreserveSizeBtn.title = isActive ? 'Preserve Original Size: ON' : 'Preserve Original Size: OFF';
                 };
             }
 
@@ -2238,7 +2234,7 @@
                 selection.fps = editorEstimatedFPS;
                 
                 // Track if it was edited in edit mode
-                selection.editModeRotated = editChanged || editorDeleteEditThumbsFlag || (editorPreserveOriginalSizeFlag !== null);
+                selection.editModeRotated = editChanged || editorDeleteEditThumbsFlag || (editorPreserveOriginalSizeFlag !== undefined && editorPreserveOriginalSizeFlag !== null);
 
                 // Update visual orientation for thumbnails if uniform and full-length (with no cuts)
                 if (isFullLength && !hasCuts) {
@@ -3991,15 +3987,15 @@
                         scriptLines.push(`    \$markers += @{ time = 0; rotation = ${rotNum} }`);
                     }
 
-                    scriptLines.push(`    \\$processedVideoPath = (Join-Path -Path (Split-Path -Parent \$sourceVideoPath) -ChildPath ('processed_' + '${escapedVideoName}'))`);
+                    scriptLines.push(`    \$processedVideoPath = (Join-Path -Path (Split-Path -Parent \$sourceVideoPath) -ChildPath ('processed_' + '${escapedVideoName}'))`);
                     const isFlipped = sel.editFlipped ? '\$true' : '\$false';
                     const cropArg = sel.crop ? `'${escapePSString(sel.crop)}'` : '\$null';
-                    const effectivePreserveSize = (sel.preserveOriginalSize !== null) ? sel.preserveOriginalSize : preserveOriginalSizeGlobalCheckbox.checked;
+                    const effectivePreserveSize = (sel.preserveOriginalSize !== undefined && sel.preserveOriginalSize !== null) ? sel.preserveOriginalSize : preserveOriginalSizeGlobalCheckbox.checked;
                     const preserveSizeArg = effectivePreserveSize ? '\$true' : '\$false';
-                    scriptLines.push(`    Process-Video -sourcePath \$sourceVideoPath -targetPath \\$processedVideoPath -cuts \$cuts -markers \$markers -flipped ${isFlipped} -crop ${cropArg} -preserveOriginalSize ${preserveSizeArg}`);
+                    scriptLines.push(`    Process-Video -sourcePath \$sourceVideoPath -targetPath \$processedVideoPath -cuts \$cuts -markers \$markers -flipped ${isFlipped} -crop ${cropArg} -preserveOriginalSize ${preserveSizeArg}`);
                     scriptLines.push(`    if (Test-Path -LiteralPath \"\$processedVideoPath\") {`);
-                    scriptLines.push(`        if (Test-Path -LiteralPath \"\\$sourceVideoPath\") { Remove-Item -LiteralPath \"\\$sourceVideoPath\" -Force }`);
-                    scriptLines.push(`        Move-Item -LiteralPath \"\$processedVideoPath\" -Destination \"\\$sourceVideoPath\" -Force`);
+                    scriptLines.push(`        if (Test-Path -LiteralPath \"\$sourceVideoPath\") { Remove-Item -LiteralPath \"\$sourceVideoPath\" -Force }`);
+                    scriptLines.push(`        Move-Item -LiteralPath \"\$processedVideoPath\" -Destination \"\$sourceVideoPath\" -Force`);
                     scriptLines.push(`        Write-Host "Applied edits to: ${escapedVideoName}"`);
                     scriptLines.push(`    }`);
                 }
@@ -4244,8 +4240,8 @@
                     if (hasSessionRotation) dataParts.push('edit_rotated:true');
                     if (hasSessionCuts) dataParts.push('has_cuts:true');
                     if (sel.crop) dataParts.push(`crop:${sel.crop}`);
-                                    if (sel.preserveOriginalSize !== null) dataParts.push(`preserve_size:${sel.preserveOriginalSize}`);
-                                    if (!hasSessionRotation && !hasSessionCuts && hasSessionOther && !sel.crop && sel.preserveOriginalSize === null) dataParts.push('edit_rotated:true');
+                                    if (sel.preserveOriginalSize !== undefined && sel.preserveOriginalSize !== null) dataParts.push(`preserve_size:${sel.preserveOriginalSize}`);
+                                    if (!hasSessionRotation && !hasSessionCuts && hasSessionOther && !sel.crop && (sel.preserveOriginalSize === undefined || sel.preserveOriginalSize === null)) dataParts.push('edit_rotated:true');
                 } else if (hasLoadedEdit) {
                     // Restore loaded flags if not overwritten by a session commit
                     const existing = editModeRotatedVideos.get(key);
@@ -4456,7 +4452,7 @@
                     sel.crop = part.substring(5);
                 }
                 if (part.startsWith('preserve_size:')) {
-                    sel.preserveOriginalSize = (part.substring(14) === 'true');
+                    sel.preserveOriginalSize = (part.substring(14).trim() === 'true');
                 }
                             }
                         });
