@@ -419,8 +419,10 @@
             background-color: var(--top-bar-color);
         }
         .bar-button:hover {
-        .bar-button.active { background-color: #43a047; }
             background-color: #166fe5;
+        }
+        .bar-button.active {
+            background-color: #43a047;
         }
         .selection-type-button.active {
             background-color: rgba(255, 255, 255, 0.2);
@@ -2895,7 +2897,7 @@
                         if (proj.path !== projectPath) {
                             const opt = document.createElement("option");
                             opt.value = proj.path;
-                            opt.textContent = proj.name;
+                            opt.textContent = (proj.isProject ? "" : "📁 ") + proj.name;
                             moveSelector.appendChild(opt);
                         }
                     });
@@ -3014,7 +3016,7 @@
                     if (proj.path !== projectPath) {
                         const opt = document.createElement('option');
                         opt.value = proj.path;
-                        opt.textContent = proj.name;
+                        opt.textContent = (proj.isProject ? "" : "📁 ") + proj.name;
                         moveSelect.appendChild(opt);
                     }
                 });
@@ -4121,7 +4123,9 @@
             
             // Ensure every project folder we've loaded gets an update (to allow for full removal)
             allProjectFolders.forEach(proj => {
-                miscUpdates.set(proj.path, {});
+                if (proj.isProject) {
+                    miscUpdates.set(proj.path, {});
+                }
             });
 
             // Collect all videos that have either categories OR edit mode rotations
@@ -4523,48 +4527,53 @@
             allVideoFiles = [];
 
             const projectFolders = [];
+            const allDiscoveredFolders = [];
 
-            async function findProjectFolders(dirHandle, currentPath = '') {
-                 for await (const entry of dirHandle.values()) {
-                    if (entry.kind === 'directory' && !skipDirs.has(entry.name.toLowerCase())) {
-                        const newPath = currentPath ? `${currentPath}\\${entry.name}` : entry.name;
-                        try {
-                            await findDirectoryHandleByName(entry, 'Edit Thumbnails');
-                            
-                            let timestamp = 0;
-                            if (isNewOnly) {
-                                timestamp = (await getTimestamp(entry)) || 0;
-                            }
+            async function scanFolders(dirHandle, currentPath = '', findProjects = true) {
+                let isProject = false;
+                try {
+                    await findDirectoryHandleByName(dirHandle, 'Edit Thumbnails');
+                    isProject = true;
+                } catch (e) {}
 
-                            projectFolders.push({ 
-                                handle: entry, 
-                                path: newPath, 
-                                name: entry.name,
-                                timestamp: timestamp 
-                            });
-                        } catch (e) {
-                           await findProjectFolders(entry, newPath);
+                allDiscoveredFolders.push({
+                    handle: dirHandle,
+                    path: currentPath,
+                    name: dirHandle.name,
+                    isProject: isProject
+                });
+
+                if (isProject && findProjects) {
+                    let timestamp = 0;
+                    if (isNewOnly) {
+                        timestamp = (await getTimestamp(dirHandle)) || 0;
+                    }
+                    projectFolders.push({
+                        handle: dirHandle,
+                        path: currentPath,
+                        name: dirHandle.name,
+                        timestamp: timestamp
+                    });
+
+                    // If it's a project, we don't look for nested projects (matching original behavior)
+                    // But we still want to find all subfolders for the move list
+                    for await (const entry of dirHandle.values()) {
+                        if (entry.kind === 'directory' && !skipDirs.has(entry.name.toLowerCase())) {
+                            const newPath = currentPath ? `${currentPath}\\${entry.name}` : entry.name;
+                            await scanFolders(entry, newPath, false);
+                        }
+                    }
+                } else {
+                    for await (const entry of dirHandle.values()) {
+                        if (entry.kind === 'directory' && !skipDirs.has(entry.name.toLowerCase())) {
+                            const newPath = currentPath ? `${currentPath}\\${entry.name}` : entry.name;
+                            await scanFolders(entry, newPath, findProjects);
                         }
                     }
                 }
             }
             
-            try {
-                await findDirectoryHandleByName(currentDirHandle, 'Edit Thumbnails');
-                let timestamp = 0;
-                if (isNewOnly) {
-                    timestamp = (await getTimestamp(currentDirHandle)) || 0;
-                }
-                projectFolders.push({ 
-                    handle: currentDirHandle, 
-                    path: '', 
-                    name: currentDirHandle.name,
-                    timestamp: timestamp
-                });
-            } catch (e) {
-                await findProjectFolders(currentDirHandle, '');
-            }
-
+            await scanFolders(currentDirHandle, '');
             projectFolders.sort((a, b) => a.name.localeCompare(b.name));
 
             let isProject = false;
@@ -4657,25 +4666,54 @@
                 }
             }
 
-            allProjectFolders = [...projectFolders];
+            allProjectFolders = [...allDiscoveredFolders];
             if (g_rootHandle && g_rootHandle !== currentDirHandle) {
-                const rootProjectFolders = [];
-                async function findRootProjectFolders(dirHandle, currentPath = '') {
-                    for await (const entry of dirHandle.values()) {
-                        if (entry.kind === 'directory' && !skipDirs.has(entry.name.toLowerCase())) {
-                            const newPath = currentPath ? `${currentPath}\\${entry.name}` : entry.name;
-                            try {
-                                await findDirectoryHandleByName(entry, 'Edit Thumbnails');
-                                rootProjectFolders.push({ handle: entry, path: newPath, name: entry.name });
-                            } catch (e) {
-                                await findRootProjectFolders(entry, newPath);
+                const rootDiscoveredFolders = [];
+                async function scanRootFolders(dirHandle, currentPath = '', findProjects = true) {
+                    let isProject = false;
+                    try {
+                        await findDirectoryHandleByName(dirHandle, 'Edit Thumbnails');
+                        isProject = true;
+                    } catch (e) {}
+
+                    rootDiscoveredFolders.push({
+                        handle: dirHandle,
+                        path: currentPath,
+                        name: dirHandle.name,
+                        isProject: isProject
+                    });
+
+                    if (isProject && findProjects) {
+                        for await (const entry of dirHandle.values()) {
+                            if (entry.kind === 'directory' && !skipDirs.has(entry.name.toLowerCase())) {
+                                const newPath = currentPath ? `${currentPath}\\${entry.name}` : entry.name;
+                                await scanRootFolders(entry, newPath, false);
+                            }
+                        }
+                    } else {
+                        for await (const entry of dirHandle.values()) {
+                            if (entry.kind === 'directory' && !skipDirs.has(entry.name.toLowerCase())) {
+                                const newPath = currentPath ? `${currentPath}\\${entry.name}` : entry.name;
+                                await scanRootFolders(entry, newPath, findProjects);
                             }
                         }
                     }
                 }
-                await findRootProjectFolders(g_rootHandle, '');
+                await scanRootFolders(g_rootHandle, '');
+
+                if (g_rootHandle) {
+                    for (const folder of rootDiscoveredFolders) {
+                        try {
+                            const relativePathParts = await g_rootHandle.resolve(folder.handle);
+                            if (relativePathParts) {
+                                folder.path = relativePathParts.join('\\');
+                            }
+                        } catch (e) {}
+                    }
+                }
+
                 const existingPaths = new Set(allProjectFolders.map(p => p.path));
-                rootProjectFolders.forEach(p => {
+                rootDiscoveredFolders.forEach(p => {
                     if (!existingPaths.has(p.path)) allProjectFolders.push(p);
                 });
                 allProjectFolders.sort((a, b) => a.name.localeCompare(b.name));
@@ -5015,6 +5053,7 @@
             thumbnailContainer.innerHTML = '';
             canvases.clear();
             shortcutSelections.clear();
+            allProjectFolders = [];
             createdObjectUrls.forEach(URL.revokeObjectURL);
             createdObjectUrls = [];
 
@@ -5048,6 +5087,9 @@
                     console.log(`Processing subfolder: ${subfolderName}`);
                     const subfolderHandle = await currentDirHandle.getDirectoryHandle(subfolderName);
                     const projectRotationData = await getRotationData(subfolderHandle);
+                    if (!allProjectFolders.some(p => p.handle === subfolderHandle)) {
+                        allProjectFolders.push({ handle: subfolderHandle, path: subfolderName, name: subfolderName, isProject: true });
+                    }
                     const editDirHandle = await findDirectoryHandleByName(subfolderHandle, 'Edit Thumbnails');
 
                     const canvasId = getNextCanvasId();
@@ -5209,6 +5251,7 @@
                     }
                 }
 
+                allProjectFolders.sort((a, b) => a.name.localeCompare(b.name));
                 await Promise.all(allImageLoadPromises);
 
                 if (canvases.size > 0) {
@@ -5247,47 +5290,101 @@
             }
 
             const projectFolders = [];
-            async function findProjectFolders(dirHandle, currentPath = '') {
-                for await (const entry of dirHandle.values()) {
-                    if (entry.kind === 'directory' && !skipDirs.has(entry.name.toLowerCase())) {
-                        const newPath = currentPath ? `${currentPath}\\${entry.name}` : entry.name;
-                        try {
-                            await findDirectoryHandleByName(entry, 'Edit Thumbnails');
-                            projectFolders.push({ 
-                                handle: entry, 
-                                path: newPath, 
-                                name: entry.name 
-                            });
-                        } catch (e) {
-                            await findProjectFolders(entry, newPath);
+            const allDiscoveredFolders = [];
+
+            async function scanFolders(dirHandle, currentPath = '', findProjects = true) {
+                let isProject = false;
+                try {
+                    await findDirectoryHandleByName(dirHandle, 'Edit Thumbnails');
+                    isProject = true;
+                } catch (e) {}
+
+                allDiscoveredFolders.push({
+                    handle: dirHandle,
+                    path: currentPath,
+                    name: dirHandle.name,
+                    isProject: isProject
+                });
+
+                if (isProject && findProjects) {
+                    projectFolders.push({
+                        handle: dirHandle,
+                        path: currentPath,
+                        name: dirHandle.name
+                    });
+
+                    for await (const entry of dirHandle.values()) {
+                        if (entry.kind === 'directory' && !skipDirs.has(entry.name.toLowerCase())) {
+                            const newPath = currentPath ? `${currentPath}\\${entry.name}` : entry.name;
+                            await scanFolders(entry, newPath, false);
+                        }
+                    }
+                } else {
+                    for await (const entry of dirHandle.values()) {
+                        if (entry.kind === 'directory' && !skipDirs.has(entry.name.toLowerCase())) {
+                            const newPath = currentPath ? `${currentPath}\\${entry.name}` : entry.name;
+                            await scanFolders(entry, newPath, findProjects);
                         }
                     }
                 }
             }
 
-            try {
-                await findDirectoryHandleByName(currentDirHandle, 'Edit Thumbnails');
-                projectFolders.push({ 
-                    handle: currentDirHandle, 
-                    path: '', 
-                    name: currentDirHandle.name
-                });
-            } catch (e) {
-                await findProjectFolders(currentDirHandle, '');
-            }
+            await scanFolders(currentDirHandle, '');
 
             if (g_rootHandle) {
-                for (const project of projectFolders) {
+                const rootDiscoveredFolders = [];
+                async function scanRootFolders(dirHandle, currentPath = '', findProjects = true) {
+                    let isProject = false;
                     try {
-                        const relativePathParts = await g_rootHandle.resolve(project.handle);
-                        if (relativePathParts) {
-                            project.path = relativePathParts.join('\\');
+                        await findDirectoryHandleByName(dirHandle, 'Edit Thumbnails');
+                        isProject = true;
+                    } catch (e) {}
+
+                    rootDiscoveredFolders.push({
+                        handle: dirHandle,
+                        path: currentPath,
+                        name: dirHandle.name,
+                        isProject: isProject
+                    });
+
+                    if (isProject && findProjects) {
+                        for await (const entry of dirHandle.values()) {
+                            if (entry.kind === 'directory' && !skipDirs.has(entry.name.toLowerCase())) {
+                                const newPath = currentPath ? `${currentPath}\\${entry.name}` : entry.name;
+                                await scanRootFolders(entry, newPath, false);
+                            }
                         }
-                    } catch (e) {
-                        console.warn(`Could not resolve path for ${project.name} relative to root.`);
+                    } else {
+                        for await (const entry of dirHandle.values()) {
+                            if (entry.kind === 'directory' && !skipDirs.has(entry.name.toLowerCase())) {
+                                const newPath = currentPath ? `${currentPath}\\${entry.name}` : entry.name;
+                                await scanRootFolders(entry, newPath, findProjects);
+                            }
+                        }
                     }
                 }
+                await scanRootFolders(g_rootHandle, '');
+
+                if (g_rootHandle) {
+                    for (const folder of rootDiscoveredFolders) {
+                        try {
+                            const relativePathParts = await g_rootHandle.resolve(folder.handle);
+                            if (relativePathParts) {
+                                folder.path = relativePathParts.join('\\');
+                            }
+                        } catch (e) {}
+                    }
+                }
+
+                const existingPaths = new Set(allDiscoveredFolders.map(p => p.path));
+                rootDiscoveredFolders.forEach(p => {
+                    if (!existingPaths.has(p.path)) allDiscoveredFolders.push(p);
+                });
             }
+
+            // For Move-To dropdowns in renderPlaylistMode
+            allProjectFolders = [...allDiscoveredFolders];
+            allProjectFolders.sort((a, b) => a.name.localeCompare(b.name));
 
             projectFolders.sort((a, b) => a.name.localeCompare(b.name));
 
