@@ -20,6 +20,7 @@
             --selected-cat-color: #ff0000;
             --edit-cuts-color: #ff8c00;
             --played-video-color: #4b0082;
+            --selected-bg-color: #ffffff;
         }
         html, body {
             height: 100%;
@@ -163,6 +164,24 @@
             vertical-align: top;
             position: relative;
             overflow: hidden;
+        }
+        .thumbnail-wrapper.selected-root-sc::after,
+        .thumbnail-wrapper.selected-subfolder-sc::after,
+        .thumbnail-wrapper.selected-both-sc::after,
+        .thumbnail-wrapper.selected-delete-sc::after,
+        .thumbnail-wrapper.selected-playlist-sc::after,
+        .thumbnail-wrapper.selected-shortcut::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--selected-bg-color);
+            opacity: 0.4;
+            pointer-events: none;
+            z-index: 5;
+            border-radius: 6px;
         }
         .thumbnail {
             object-fit: cover;
@@ -803,6 +822,10 @@
                             <div class="options-row">
                                 <label for="played-video-color-picker">Played Video Toolbar</label>
                                 <input type="color" id="played-video-color-picker" value="#4b0082">
+                            </div>
+                            <div class="options-row">
+                                <label for="selected-bg-color-picker">Selection Background</label>
+                                <input type="color" id="selected-bg-color-picker" value="#ffffff">
                             </div>
                             <button id="revert-defaults-btn" style="width: 100%; text-align: center; border-top: 1px solid #ccc; font-weight: bold;">Revert to Default Colors</button>
                         </div>
@@ -1954,8 +1977,13 @@
             // If after using the main page buttons (which clear markers), the slate should be cleared in the editor.
             // Resuming is supported only if markers or cuts exist.
             if (editorMarkers.length === 0 && editorCurrentCuts.length === 0) {
-                editorCurrentAppliedRotation = 0;
-                editorCurrentAppliedFlip = false;
+                const initialRot = (selection && selection.rotation) || "0";
+                const initialFlipped = selection ? !!selection.flipped : false;
+                if (initialRot !== "0") {
+                    editorMarkers = [{ time: 0, rotation: parseInt(initialRot) }];
+                }
+                editorCurrentAppliedRotation = parseInt(initialRot);
+                editorCurrentAppliedFlip = initialFlipped;
             } else {
                 editorCurrentAppliedRotation = (selection && selection.editRotation) ? parseInt(selection.editRotation) : 0;
                 editorCurrentAppliedFlip = selection ? !!selection.editFlipped : false;
@@ -2316,7 +2344,8 @@
                 'playlist-sc-color': document.getElementById('playlist-sc-color-picker'),
                 'selected-cat-color': document.getElementById('selected-cat-color-picker'),
                 'edit-cuts-color': document.getElementById('edit-cuts-color-picker'),
-                'played-video-color': document.getElementById('played-video-color-picker')
+                'played-video-color': document.getElementById('played-video-color-picker'),
+                'selected-bg-color': document.getElementById('selected-bg-color-picker')
             };
 
             // Load saved colors
@@ -2360,7 +2389,8 @@
                         'playlist-sc-color': '#ff00ff',
                         'selected-cat-color': '#ff0000',
                         'edit-cuts-color': '#ff8c00',
-                        'played-video-color': '#4b0082'
+                        'played-video-color': '#4b0082',
+                        'selected-bg-color': '#ffffff'
                     };
                     Object.keys(defaults).forEach(id => {
                         const color = defaults[id];
@@ -2898,10 +2928,16 @@
             }
 
             rowDiv.querySelectorAll('.thumbnail').forEach(t => {
-                t.classList.remove('selected-root-sc', 'selected-subfolder-sc', 'selected-both-sc', 'selected-delete-sc', 'selected-playlist-sc', 'selected-shortcut', 'flipped');
+                const wrapper = t.closest('.thumbnail-wrapper');
+                const selectionClasses = ['selected-root-sc', 'selected-subfolder-sc', 'selected-both-sc', 'selected-delete-sc', 'selected-playlist-sc', 'selected-shortcut'];
+
+                t.classList.remove(...selectionClasses, 'flipped');
+                if (wrapper) wrapper.classList.remove(...selectionClasses);
+
                 t.classList.remove('rotate-90', 'rotate-180', 'rotate-270');
                 if (type) {
                     t.classList.add('selected-' + type);
+                    if (wrapper) wrapper.classList.add('selected-' + type);
                 }
                 if (visualRotationStr !== "0") {
                     t.classList.add('rotate-' + visualRotationStr);
@@ -2998,6 +3034,9 @@
                 selection.editRotation = selection.rotation;
                 selection.editRotationType = 'uniform';
                 selection.isFullLength = true;
+                if (selection.preserveOriginalSize === undefined || selection.preserveOriginalSize === null) {
+                    selection.preserveOriginalSize = preserveOriginalSizeGlobalCheckbox.checked;
+                }
                 selection.markers = []; // Clear complex markers
                 selection.cuts = [];    // Clear cuts
                 
@@ -3038,6 +3077,9 @@
                 // Main page flip now performs "hard" edit
                 selection.editModeRotated = true;
                 selection.editFlipped = selection.flipped;
+                if (selection.preserveOriginalSize === undefined || selection.preserveOriginalSize === null) {
+                    selection.preserveOriginalSize = preserveOriginalSizeGlobalCheckbox.checked;
+                }
                 selection.markers = []; // Clear complex markers
                 selection.cuts = [];    // Clear cuts
                 
@@ -3380,7 +3422,8 @@
                 const isSessionEdit = sel.editModeRotated;
                 const isMetadataChange = (sel.rotation !== initialRot) || (!!sel.flipped !== initialFlipped);
                 
-                return isSessionEdit || isMetadataChange || sel.deleteEditThumbnails;
+                const psChanged = sel.preserveOriginalSize !== undefined && sel.preserveOriginalSize !== null;
+                return isSessionEdit || isMetadataChange || sel.deleteEditThumbnails || psChanged;
             });
 
             const hasNewSelections = Array.from(shortcutSelections.entries()).some(([key, sel]) => {
@@ -3926,7 +3969,7 @@
                 const editRotationChanged = sel.editRotation && sel.editRotation !== "0";
                 const editFlippedChanged = !!sel.editFlipped;
                 
-                const needsProcessing = (hasCuts || markersChanged || editRotationChanged || editFlippedChanged || sel.crop) && sel.editModeRotated;
+                const needsProcessing = (hasCuts || markersChanged || editRotationChanged || editFlippedChanged || sel.crop || (sel.preserveOriginalSize !== undefined && sel.preserveOriginalSize !== null)) && sel.editModeRotated;
 
                 const rotationChanged = sel.rotation !== initialRot;
                 const flippedChanged = !!sel.flipped !== initialFlipped;
@@ -4343,7 +4386,8 @@
             batchScriptTextArea.value = scriptStr;
             const blob = new Blob(['\ufeff', scriptStr], { type: 'application/octet-stream' });
             downloadScriptLink.href = URL.createObjectURL(blob);
-            downloadScriptLink.download = 'create_shortcuts.ps1';
+            const scriptName = (currentMode === 'directory' || currentMode === 'latest-videos') ? 'sc_actions.ps1' : 'create_shortcuts.ps1';
+            downloadScriptLink.download = scriptName;
         }
 
 
@@ -5083,7 +5127,10 @@
                             const img = new Image();
                             img.className = 'thumbnail';
                             img.dataset.fileName = file.name;
-                            if (initialShortcutType && currentMode !== 'playlist-root' && currentMode !== 'update-playlist-root') img.classList.add('selected-' + initialShortcutType);
+                            if (initialShortcutType && currentMode !== 'playlist-root' && currentMode !== 'update-playlist-root') {
+                                img.classList.add('selected-' + initialShortcutType);
+                                wrapper.classList.add('selected-' + initialShortcutType);
+                            }
                             if (rotation !== "0") img.classList.add('rotate-' + rotation);
                             if (flipped) img.classList.add('flipped');
                             wrapper.appendChild(img);
@@ -5297,6 +5344,12 @@
                                 const img = new Image();
                                 img.className = 'thumbnail';
                                 img.dataset.fileName = file.name;
+                                const key = subfolderName + '|' + realVideoName;
+                                const selection = shortcutSelections.get(key);
+                                if (selection && selection.type) {
+                                    img.classList.add('selected-' + selection.type);
+                                    wrapper.classList.add('selected-' + selection.type);
+                                }
                                 if (rotation !== "0") {
                                     img.classList.add('rotate-' + rotation);
                                 }
@@ -5658,8 +5711,14 @@
                         thumbnailFiles.forEach(file => {
                             const wrapper = document.createElement('div');
                             wrapper.className = 'thumbnail-wrapper';
+                            if (selection && selection.type) {
+                                wrapper.classList.add('selected-' + selection.type);
+                            }
                             const img = new Image();
                             img.className = 'thumbnail';
+                            if (selection && selection.type) {
+                                img.classList.add('selected-' + selection.type);
+                            }
                             img.dataset.projectPath = project.path;
                             wrapper.appendChild(img);
                             thumbnailsContainer.appendChild(wrapper);
