@@ -20,7 +20,12 @@
             --selected-cat-color: #ff0000;
             --edit-cuts-color: #ff8c00;
             --played-video-color: #4b0082;
-            --selected-bg-color: #ffffff;
+            --root-sc-bg-color: #ffe11f;
+            --subfolder-sc-bg-color: #00ff1e;
+            --both-sc-bg-color: #009dff;
+            --delete-sc-bg-color: #ff0101;
+            --playlist-sc-bg-color: #ff00ff;
+            --shortcut-bg-color: #008000;
         }
         html, body {
             height: 100%;
@@ -165,6 +170,13 @@
             position: relative;
             overflow: hidden;
         }
+        .thumbnail-wrapper.selected-root-sc::after { background-color: var(--root-sc-bg-color); }
+        .thumbnail-wrapper.selected-subfolder-sc::after { background-color: var(--subfolder-sc-bg-color); }
+        .thumbnail-wrapper.selected-both-sc::after { background-color: var(--both-sc-bg-color); }
+        .thumbnail-wrapper.selected-delete-sc::after { background-color: var(--delete-sc-bg-color); }
+        .thumbnail-wrapper.selected-playlist-sc::after { background-color: var(--playlist-sc-bg-color); }
+        .thumbnail-wrapper.selected-shortcut::after { background-color: var(--shortcut-bg-color); }
+
         .thumbnail-wrapper.selected-root-sc::after,
         .thumbnail-wrapper.selected-subfolder-sc::after,
         .thumbnail-wrapper.selected-both-sc::after,
@@ -177,7 +189,6 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background-color: var(--selected-bg-color);
             opacity: 0.4;
             pointer-events: none;
             z-index: 5;
@@ -824,8 +835,28 @@
                                 <input type="color" id="played-video-color-picker" value="#4b0082">
                             </div>
                             <div class="options-row">
-                                <label for="selected-bg-color-picker">Selection Background</label>
-                                <input type="color" id="selected-bg-color-picker" value="#ffffff">
+                                <label for="root-sc-bg-color-picker">Root SC Background</label>
+                                <input type="color" id="root-sc-bg-color-picker" value="#ffe11f">
+                            </div>
+                            <div class="options-row">
+                                <label for="subfolder-sc-bg-color-picker">Subfolder SC Background</label>
+                                <input type="color" id="subfolder-sc-bg-color-picker" value="#00ff1e">
+                            </div>
+                            <div class="options-row">
+                                <label for="both-sc-bg-color-picker">Both SC Background</label>
+                                <input type="color" id="both-sc-bg-color-picker" value="#009dff">
+                            </div>
+                            <div class="options-row">
+                                <label for="delete-sc-bg-color-picker">Delete BG Color</label>
+                                <input type="color" id="delete-sc-bg-color-picker" value="#ff0101">
+                            </div>
+                            <div class="options-row">
+                                <label for="playlist-sc-bg-color-picker">Playlist BG Color</label>
+                                <input type="color" id="playlist-sc-bg-color-picker" value="#ff00ff">
+                            </div>
+                            <div class="options-row">
+                                <label for="shortcut-bg-color-picker">Shortcut BG Color</label>
+                                <input type="color" id="shortcut-bg-color-picker" value="#008000">
                             </div>
                             <button id="revert-defaults-btn" style="width: 100%; text-align: center; border-top: 1px solid #ccc; font-weight: bold;">Revert to Default Colors</button>
                         </div>
@@ -2368,7 +2399,12 @@
                 'selected-cat-color': document.getElementById('selected-cat-color-picker'),
                 'edit-cuts-color': document.getElementById('edit-cuts-color-picker'),
                 'played-video-color': document.getElementById('played-video-color-picker'),
-                'selected-bg-color': document.getElementById('selected-bg-color-picker')
+                'root-sc-bg-color': document.getElementById('root-sc-bg-color-picker'),
+                'subfolder-sc-bg-color': document.getElementById('subfolder-sc-bg-color-picker'),
+                'both-sc-bg-color': document.getElementById('both-sc-bg-color-picker'),
+                'delete-sc-bg-color': document.getElementById('delete-sc-bg-color-picker'),
+                'playlist-sc-bg-color': document.getElementById('playlist-sc-bg-color-picker'),
+                'shortcut-bg-color': document.getElementById('shortcut-bg-color-picker')
             };
 
             // Load saved colors
@@ -2413,7 +2449,12 @@
                         'selected-cat-color': '#ff0000',
                         'edit-cuts-color': '#ff8c00',
                         'played-video-color': '#4b0082',
-                        'selected-bg-color': '#ffffff'
+                        'root-sc-bg-color': '#ffe11f',
+                        'subfolder-sc-bg-color': '#00ff1e',
+                        'both-sc-bg-color': '#009dff',
+                        'delete-sc-bg-color': '#ff0101',
+                        'playlist-sc-bg-color': '#ff00ff',
+                        'shortcut-bg-color': '#008000'
                     };
                     Object.keys(defaults).forEach(id => {
                         const color = defaults[id];
@@ -3669,9 +3710,6 @@
                 '    if (\$segments.Count -eq 0) { Write-Host "All content cut for \$sourcePath"; return }',
                 '    ',
                 '    # Determine target dimensions',
-                '    \$apparentSW = if (\$srcRot -eq 90 -or \$srcRot -eq 270) { \$sh } else { \$sw }',
-                '    \$apparentSH = if (\$srcRot -eq 90 -or \$srcRot -eq 270) { \$sw } else { \$sh }',
-                '    ',
                 '    \$finalTW = 0; \$finalTH = 0',
                 '    if (\$preserveOriginalSize) {',
                 '        \$maxH = 0',
@@ -3684,8 +3722,14 @@
                 '        }',
                 '        \$finalTW = \$maxScaledW',
                 '    } else {',
-                '        \$finalTW = \$apparentSW',
-                '        \$finalTH = \$apparentSH',
+                '        # When OFF, we determine if the output should be swapped relative to input metadata orientation',
+                '        # by looking at the most common orientation of segments',
+                '        \$rot90Count = 0; \$rot0Count = 0',
+                '        foreach (\$s in \$segments) {',
+                '            if (\$s.rotation -eq 90 -or \$s.rotation -eq 270) { \$rot90Count++ } else { \$rot0Count++ }',
+                '        }',
+                '        if (\$rot90Count -gt \$rot0Count) { \$finalTW = \$sh; \$finalTH = \$sw }',
+                '        else { \$finalTW = \$sw; \$finalTH = \$sh }',
                 '    }',
                 '    \$finalTW = [Math]::Ceiling(\$finalTW / 2) * 2',
                 '    \$finalTH = [Math]::Ceiling(\$finalTH / 2) * 2',
@@ -3728,7 +3772,7 @@
                 '    ',
                 '    Write-Host "  > Encoding with filter_complex..."',
                 '    \$mapArgs = if (\$hasAudio) { @("-map", "[v]", "-map", "[a]") } else { @("-map", "[v]") }',
-                '    ffmpeg -y -noautorotate -i "\$sourcePath" -filter_complex \"\$(Get-Content -LiteralPath \$filterPath -Raw)\" @mapArgs -c:v libx264 -crf 17 -preset veryslow -c:a aac -b:a 192k -metadata:s:v rotate=0 -movflags +faststart "\$targetPath"',
+                '    ffmpeg -y -noautorotate -i "\$sourcePath" -filter_complex \"\$(Get-Content -LiteralPath \$filterPath -Raw)\" @mapArgs -c:v libx264 -crf 17 -preset slow -pix_fmt yuv420p -c:a aac -b:a 192k -metadata:s:v rotate=0 -movflags +faststart "\$targetPath"',
                 '    Remove-Item -LiteralPath "\$tempDir" -Recurse -Force',
                 '}',
                 '',
