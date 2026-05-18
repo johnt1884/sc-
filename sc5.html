@@ -965,6 +965,7 @@
                             <button id="editor-cropBtn" class="bar-button" style="border-color:#43a047">Crop</button>
                             <button id="editor-deleteEditThumbsBtn" class="bar-button" style="border-color:#f44336">Delete Thumbnails</button>
                             <button id="editor-preserveSizeBtn" class="bar-button" style="border-color:#009dff">Preserve Size</button>
+                            <button id="editor-backupOriginalBtn" class="bar-button" style="border-color:#ff00ff">Backup Original</button>
                             <button id="editor-commitBtn" class="editor-greenBtn">Commit</button>
                         </div>
                         <div class="editor-control-group" style="justify-content:flex-end">
@@ -1058,6 +1059,7 @@
         const editorFlipBtn = document.getElementById('editor-flipBtn');
         const editorDeleteEditThumbsBtn = document.getElementById('editor-deleteEditThumbsBtn');
         const editorPreserveSizeBtn = document.getElementById('editor-preserveSizeBtn');
+        const editorBackupOriginalBtn = document.getElementById('editor-backupOriginalBtn');
         const editorCropBtn = document.getElementById('editor-cropBtn');
         const editorCropBox = document.getElementById('editor-cropBox');
         const editorCropConfirm = document.getElementById('editor-cropConfirm');
@@ -1936,6 +1938,7 @@
                         editorCurrentAppliedFlip = false;
                         editorCurrentAppliedRotation = 0;
                         editorDeleteEditThumbsFlag = false;
+                        editorBackupOriginalFlag = false;
                         editorPreserveOriginalSizeFlag = null;
                         if (editorDeleteEditThumbsBtn) {
                             editorDeleteEditThumbsBtn.classList.remove('active');
@@ -1947,6 +1950,10 @@
                             editorPreserveSizeBtn.classList.toggle('active', isActive);
                             editorPreserveSizeBtn.style.backgroundColor = isActive ? 'rgba(0, 157, 255, 0.6)' : 'rgba(150, 150, 150, 0.3)';
                             editorPreserveSizeBtn.title = isActive ? 'Preserve Original Size: ON' : 'Preserve Original Size: OFF';
+                        }
+                        if (editorBackupOriginalBtn) {
+                            editorBackupOriginalBtn.classList.remove('active');
+                            editorBackupOriginalBtn.style.backgroundColor = '';
                         }
                         editorCurrentCrop = null;
                         editorPendingCrop = null;
@@ -1990,6 +1997,7 @@
                 editorCurrentAppliedFlip = selection ? !!selection.editFlipped : false;
             }
             editorDeleteEditThumbsFlag = selection ? !!selection.deleteEditThumbnails : false;
+            editorBackupOriginalFlag = selection ? !!selection.backupOriginal : false;
             editorPreserveOriginalSizeFlag = (selection && selection.preserveOriginalSize !== undefined && selection.preserveOriginalSize !== null)
                 ? selection.preserveOriginalSize
                 : preserveOriginalSizeGlobalCheckbox.checked;
@@ -2012,6 +2020,11 @@
                 editorPreserveSizeBtn.classList.toggle('active', isActive);
                 editorPreserveSizeBtn.style.backgroundColor = isActive ? 'rgba(0, 157, 255, 0.6)' : 'rgba(150, 150, 150, 0.3)';
                 editorPreserveSizeBtn.title = isActive ? 'Preserve Original Size: ON' : 'Preserve Original Size: OFF';
+            }
+
+            if (editorBackupOriginalBtn) {
+                editorBackupOriginalBtn.classList.toggle('active', editorBackupOriginalFlag);
+                editorBackupOriginalBtn.style.backgroundColor = editorBackupOriginalFlag ? 'rgba(255, 0, 255, 0.6)' : '';
             }
 
             if (editorCropBtn) {
@@ -2180,6 +2193,14 @@
                 };
             }
 
+            if (editorBackupOriginalBtn) {
+                editorBackupOriginalBtn.onclick = () => {
+                    editorBackupOriginalFlag = !editorBackupOriginalFlag;
+                    editorBackupOriginalBtn.classList.toggle('active', editorBackupOriginalFlag);
+                    editorBackupOriginalBtn.style.backgroundColor = editorBackupOriginalFlag ? 'rgba(255, 0, 255, 0.6)' : '';
+                };
+            }
+
             editorTimeline.onmousedown = e => {
                 editorScrubbingMouseDown = true;
                 editorScrubToPosition(e.clientX);
@@ -2259,11 +2280,12 @@
                 selection.editFlipped = finalEditFlipped;
                 selection.crop = editorCurrentCrop;
                 selection.deleteEditThumbnails = editorDeleteEditThumbsFlag;
+                selection.backupOriginal = editorBackupOriginalFlag;
                 selection.preserveOriginalSize = editorPreserveOriginalSizeFlag;
                 selection.fps = editorEstimatedFPS;
                 
                 // Track if it was edited in edit mode
-                selection.editModeRotated = editChanged || editorDeleteEditThumbsFlag || (editorPreserveOriginalSizeFlag !== undefined && editorPreserveOriginalSizeFlag !== null);
+                selection.editModeRotated = editChanged || editorDeleteEditThumbsFlag || editorBackupOriginalFlag || (editorPreserveOriginalSizeFlag !== undefined && editorPreserveOriginalSizeFlag !== null);
 
                 // Update visual orientation for thumbnails if uniform and full-length (with no cuts)
                 if (isFullLength && !hasCuts) {
@@ -2913,6 +2935,7 @@
                             if (selection.cuts && selection.cuts.length > 0) tooltipParts.push(`Cuts: ${selection.cuts.length}`);
                             if (selection.crop) tooltipParts.push(`Crop: ${selection.crop}`);
                             if (selection.deleteEditThumbnails) tooltipParts.push(`Delete Thumbs: YES`);
+                            if (selection.backupOriginal) tooltipParts.push(`Backup Original: YES`);
                         } else if (selection && (selection.loadedEditRotated || selection.loadedHasCuts)) {
                             // Persistent flags from previous session
                             if (selection.loadedEditRotated) tooltipParts.push('Edit Mode: Rotated in previous session');
@@ -4004,6 +4027,13 @@
                     const preserveSizeArg = effectivePreserveSize ? '\$true' : '\$false';
                     scriptLines.push(`    Process-Video -sourcePath \$sourceVideoPath -targetPath \$processedVideoPath -cuts \$cuts -markers \$markers -flipped ${isFlipped} -crop ${cropArg} -preserveOriginalSize ${preserveSizeArg}`);
                     scriptLines.push(`    if (Test-Path -LiteralPath \"\$processedVideoPath\") {`);
+                    if (sel.backupOriginal) {
+                        const projRes = getPSPathRes('\$BaseDir', sel.projectPath, sel.projectName, '');
+                        scriptLines.push(`        \$backupDir = (Join-Path -Path ${projRes} -ChildPath 'Originals')`);
+                        scriptLines.push(`        if (-not (Test-Path -LiteralPath \$backupDir)) { [System.IO.Directory]::CreateDirectory(\$backupDir) | Out-Null }`);
+                        scriptLines.push(`        \$backupPath = (Join-Path -Path \$backupDir -ChildPath '${escapedVideoName}')`);
+                        scriptLines.push(`        if (-not (Test-Path -LiteralPath \$backupPath)) { Copy-Item -LiteralPath \"\$sourceVideoPath\" -Destination \$backupPath; Write-Host "Backed up original to: Originals\\${escapedVideoName}" }`);
+                    }
                     scriptLines.push(`        if (Test-Path -LiteralPath \"\$sourceVideoPath\") { Remove-Item -LiteralPath \"\$sourceVideoPath\" -Force }`);
                     scriptLines.push(`        Move-Item -LiteralPath \"\$processedVideoPath\" -Destination \"\$sourceVideoPath\" -Force`);
                     scriptLines.push(`        Write-Host "Applied edits to: ${escapedVideoName}"`);
@@ -4251,7 +4281,8 @@
                     if (hasSessionCuts) dataParts.push('has_cuts:true');
                     if (sel.crop) dataParts.push(`crop:${sel.crop}`);
                                     if (sel.preserveOriginalSize !== undefined && sel.preserveOriginalSize !== null) dataParts.push(`preserve_size:${sel.preserveOriginalSize}`);
-                                    if (!hasSessionRotation && !hasSessionCuts && hasSessionOther && !sel.crop && (sel.preserveOriginalSize === undefined || sel.preserveOriginalSize === null)) dataParts.push('edit_rotated:true');
+                                    if (sel.backupOriginal) dataParts.push(`backup_original:true`);
+                                    if (!hasSessionRotation && !hasSessionCuts && hasSessionOther && !sel.crop && (sel.preserveOriginalSize === undefined || sel.preserveOriginalSize === null) && !sel.backupOriginal) dataParts.push('edit_rotated:true');
                 } else if (hasLoadedEdit) {
                     // Restore loaded flags if not overwritten by a session commit
                     const existing = editModeRotatedVideos.get(key);
@@ -4262,6 +4293,7 @@
                         if (cMatch) dataParts.push(`crop:${cMatch[1]}`);
                                     const psMatch = existing.match(/preserve_size:([^|]+)/);
                                     if (psMatch) dataParts.push(`preserve_size:${psMatch[1]}`);
+                                    if (existing.includes('backup_original:true')) dataParts.push('backup_original:true');
                     } else {
                         dataParts.push('edit_rotated:true');
                     }
@@ -4464,6 +4496,9 @@
                 }
                 if (part.startsWith('preserve_size:')) {
                     sel.preserveOriginalSize = (part.substring(14).trim() === 'true');
+                }
+                if (part.startsWith('backup_original:')) {
+                    sel.backupOriginal = (part.substring(16).trim() === 'true');
                 }
                             }
                         });
