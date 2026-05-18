@@ -26,6 +26,8 @@
             --delete-sc-bg-color: #ff0101;
             --playlist-sc-bg-color: #ff00ff;
             --shortcut-bg-color: #008000;
+            --selection-tint-color: #ffffff;
+            --selection-opacity: 0.4;
         }
         html, body {
             height: 100%;
@@ -177,6 +179,15 @@
         .thumbnail-wrapper.selected-playlist-sc::after { background-color: var(--playlist-sc-bg-color); }
         .thumbnail-wrapper.selected-shortcut::after { background-color: var(--shortcut-bg-color); }
 
+        .main-container.uniform-selection-bg .thumbnail-wrapper.selected-root-sc::after,
+        .main-container.uniform-selection-bg .thumbnail-wrapper.selected-subfolder-sc::after,
+        .main-container.uniform-selection-bg .thumbnail-wrapper.selected-both-sc::after,
+        .main-container.uniform-selection-bg .thumbnail-wrapper.selected-delete-sc::after,
+        .main-container.uniform-selection-bg .thumbnail-wrapper.selected-playlist-sc::after,
+        .main-container.uniform-selection-bg .thumbnail-wrapper.selected-shortcut::after {
+            background-color: var(--selection-tint-color) !important;
+        }
+
         .thumbnail-wrapper.selected-root-sc::after,
         .thumbnail-wrapper.selected-subfolder-sc::after,
         .thumbnail-wrapper.selected-both-sc::after,
@@ -189,7 +200,7 @@
             left: 0;
             right: 0;
             bottom: 0;
-            opacity: 0.4;
+            opacity: var(--selection-opacity);
             pointer-events: none;
             z-index: 5;
             border-radius: 6px;
@@ -857,6 +868,18 @@
                             <div class="options-row">
                                 <label for="shortcut-bg-color-picker">Shortcut BG Color</label>
                                 <input type="color" id="shortcut-bg-color-picker" value="#008000">
+                            </div>
+                            <div class="options-row">
+                                <label for="uniform-selection-bg-checkbox">Uniform Selection Background</label>
+                                <input type="checkbox" id="uniform-selection-bg-checkbox">
+                            </div>
+                            <div class="options-row">
+                                <label for="selection-tint-color-picker">Selection Tint Color</label>
+                                <input type="color" id="selection-tint-color-picker" value="#ffffff">
+                            </div>
+                            <div class="options-row">
+                                <label for="selection-opacity-slider">Selection Opacity</label>
+                                <input type="range" id="selection-opacity-slider" min="0" max="1" step="0.05" value="0.4">
                             </div>
                             <button id="revert-defaults-btn" style="width: 100%; text-align: center; border-top: 1px solid #ccc; font-weight: bold;">Revert to Default Colors</button>
                         </div>
@@ -2404,8 +2427,12 @@
                 'both-sc-bg-color': document.getElementById('both-sc-bg-color-picker'),
                 'delete-sc-bg-color': document.getElementById('delete-sc-bg-color-picker'),
                 'playlist-sc-bg-color': document.getElementById('playlist-sc-bg-color-picker'),
-                'shortcut-bg-color': document.getElementById('shortcut-bg-color-picker')
+                'shortcut-bg-color': document.getElementById('shortcut-bg-color-picker'),
+                'selection-tint-color': document.getElementById('selection-tint-color-picker')
             };
+
+            const selectionOpacitySlider = document.getElementById('selection-opacity-slider');
+            const uniformBgCheckbox = document.getElementById('uniform-selection-bg-checkbox');
 
             // Load saved colors
             Object.keys(colorPickers).forEach(id => {
@@ -2432,6 +2459,30 @@
                 });
             });
 
+            if (selectionOpacitySlider) {
+                const saved = localStorage.getItem('sc-selection-opacity');
+                if (saved) {
+                    selectionOpacitySlider.value = saved;
+                    document.documentElement.style.setProperty('--selection-opacity', saved);
+                }
+                selectionOpacitySlider.addEventListener('input', (e) => {
+                    const val = e.target.value;
+                    document.documentElement.style.setProperty('--selection-opacity', val);
+                    localStorage.setItem('sc-selection-opacity', val);
+                });
+            }
+
+            if (uniformBgCheckbox) {
+                const saved = localStorage.getItem('sc-uniform-selection-bg') === 'true';
+                uniformBgCheckbox.checked = saved;
+                mainContainer.classList.toggle('uniform-selection-bg', saved);
+                uniformBgCheckbox.addEventListener('change', () => {
+                    const isChecked = uniformBgCheckbox.checked;
+                    mainContainer.classList.toggle('uniform-selection-bg', isChecked);
+                    localStorage.setItem('sc-uniform-selection-bg', isChecked);
+                });
+            }
+
             if (revertDefaultsBtn) {
                 revertDefaultsBtn.addEventListener('click', () => {
                     const defaults = {
@@ -2454,8 +2505,19 @@
                         'both-sc-bg-color': '#009dff',
                         'delete-sc-bg-color': '#ff0101',
                         'playlist-sc-bg-color': '#ff00ff',
-                        'shortcut-bg-color': '#008000'
+                        'shortcut-bg-color': '#008000',
+                        'selection-tint-color': '#ffffff'
                     };
+                    if (selectionOpacitySlider) {
+                        selectionOpacitySlider.value = 0.4;
+                        document.documentElement.style.setProperty('--selection-opacity', 0.4);
+                        localStorage.setItem('sc-selection-opacity', 0.4);
+                    }
+                    if (uniformBgCheckbox) {
+                        uniformBgCheckbox.checked = false;
+                        mainContainer.classList.remove('uniform-selection-bg');
+                        localStorage.setItem('sc-uniform-selection-bg', false);
+                    }
                     Object.keys(defaults).forEach(id => {
                         const color = defaults[id];
                         document.documentElement.style.setProperty(`--${id}`, color);
@@ -3722,13 +3784,12 @@
                 '        }',
                 '        \$finalTW = \$maxScaledW',
                 '    } else {',
-                '        # When OFF, we determine if the output should be swapped relative to input metadata orientation',
-                '        # by looking at the most common orientation of segments',
-                '        \$rot90Count = 0; \$rot0Count = 0',
+                '        # When OFF, we swap dimensions if any segment is rotated 90/270',$
+                '        \$anyRotated = \$false',$
                 '        foreach (\$s in \$segments) {',
-                '            if (\$s.rotation -eq 90 -or \$s.rotation -eq 270) { \$rot90Count++ } else { \$rot0Count++ }',
+                '            if (\$s.rotation -eq 90 -or \$s.rotation -eq 270) { \$anyRotated = \$true; break }',$
                 '        }',
-                '        if (\$rot90Count -gt \$rot0Count) { \$finalTW = \$sh; \$finalTH = \$sw }',
+                '        if (\$anyRotated) { \$finalTW = \$sh; \$finalTH = \$sw }',$
                 '        else { \$finalTW = \$sw; \$finalTH = \$sh }',
                 '    }',
                 '    \$finalTW = [Math]::Ceiling(\$finalTW / 2) * 2',
@@ -3772,7 +3833,7 @@
                 '    ',
                 '    Write-Host "  > Encoding with filter_complex..."',
                 '    \$mapArgs = if (\$hasAudio) { @("-map", "[v]", "-map", "[a]") } else { @("-map", "[v]") }',
-                '    ffmpeg -y -noautorotate -i "\$sourcePath" -filter_complex \"\$(Get-Content -LiteralPath \$filterPath -Raw)\" @mapArgs -c:v libx264 -crf 17 -preset slow -pix_fmt yuv420p -c:a aac -b:a 192k -metadata:s:v rotate=0 -movflags +faststart "\$targetPath"',
+                '    ffmpeg -y -noautorotate -i "\$sourcePath" -filter_complex \"\$(Get-Content -LiteralPath \$filterPath -Raw)\" @mapArgs -c:v libx264 -crf 17 -preset veryslow -pix_fmt yuv420p -c:a aac -b:a 192k -metadata:s:v rotate=0 -movflags +faststart "\$targetPath"',
                 '    Remove-Item -LiteralPath "\$tempDir" -Recurse -Force',
                 '}',
                 '',
