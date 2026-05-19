@@ -1164,6 +1164,29 @@
         let editorCurrentAppliedRotation = 0;
         let editorCurrentAppliedFlip = false;
         let editorDeleteEditThumbsFlag = false;
+        function updatePreserveSizeBtnUI() {
+            if (!editorPreserveSizeBtn) return;
+            const state = editorPreserveOriginalSizeFlag; // null, true, or false
+            const globalOn = preserveOriginalSizeGlobalCheckbox.checked;
+
+            if (state === null) {
+                editorPreserveSizeBtn.classList.remove('active');
+                editorPreserveSizeBtn.style.backgroundColor = 'rgba(150, 150, 150, 0.3)';
+                editorPreserveSizeBtn.title = `Preserve Original Size: Default (${globalOn ? 'ON' : 'OFF'})`;
+                editorPreserveSizeBtn.textContent = 'Preserve Size (D)';
+            } else if (state === true) {
+                editorPreserveSizeBtn.classList.add('active');
+                editorPreserveSizeBtn.style.backgroundColor = 'rgba(0, 157, 255, 0.6)';
+                editorPreserveSizeBtn.title = 'Preserve Original Size: ON (Override)';
+                editorPreserveSizeBtn.textContent = 'Preserve Size (ON)';
+            } else {
+                editorPreserveSizeBtn.classList.add('active');
+                editorPreserveSizeBtn.style.backgroundColor = 'rgba(244, 67, 54, 0.6)';
+                editorPreserveSizeBtn.title = 'Preserve Original Size: OFF (Override)';
+                editorPreserveSizeBtn.textContent = 'Preserve Size (OFF)';
+            }
+        }
+
         let editorCurrentCrop = null;
         let editorPendingCrop = null;
         let currentlyPlayingRow = null;
@@ -2054,7 +2077,7 @@
             editorBackupOriginalFlag = selection ? !!selection.backupOriginal : false;
             editorPreserveOriginalSizeFlag = (selection && selection.preserveOriginalSize !== undefined && selection.preserveOriginalSize !== null)
                 ? selection.preserveOriginalSize
-                : preserveOriginalSizeGlobalCheckbox.checked;
+                : null;
             editorCurrentCrop = selection ? (selection.crop || null) : null;
             editorPendingCrop = editorCurrentCrop;
             applyCropPreview();
@@ -2069,12 +2092,7 @@
                 editorDeleteEditThumbsBtn.style.backgroundColor = editorDeleteEditThumbsFlag ? 'rgba(244, 67, 54, 0.3)' : '';
             }
 
-            if (editorPreserveSizeBtn) {
-                const isActive = editorPreserveOriginalSizeFlag === true;
-                editorPreserveSizeBtn.classList.toggle('active', isActive);
-                editorPreserveSizeBtn.style.backgroundColor = isActive ? 'rgba(0, 157, 255, 0.6)' : 'rgba(150, 150, 150, 0.3)';
-                editorPreserveSizeBtn.title = isActive ? 'Preserve Original Size: ON' : 'Preserve Original Size: OFF';
-            }
+            updatePreserveSizeBtnUI();
 
             if (editorBackupOriginalBtn) {
                 editorBackupOriginalBtn.classList.toggle('active', editorBackupOriginalFlag);
@@ -2238,12 +2256,10 @@
 
             if (editorPreserveSizeBtn) {
                 editorPreserveSizeBtn.onclick = () => {
-                    editorPreserveOriginalSizeFlag = !editorPreserveOriginalSizeFlag;
-
-                    const isActive = editorPreserveOriginalSizeFlag === true;
-                    editorPreserveSizeBtn.classList.toggle('active', isActive);
-                    editorPreserveSizeBtn.style.backgroundColor = isActive ? 'rgba(0, 157, 255, 0.6)' : 'rgba(150, 150, 150, 0.3)';
-                    editorPreserveSizeBtn.title = isActive ? 'Preserve Original Size: ON' : 'Preserve Original Size: OFF';
+                    if (editorPreserveOriginalSizeFlag === null) editorPreserveOriginalSizeFlag = true;
+                    else if (editorPreserveOriginalSizeFlag === true) editorPreserveOriginalSizeFlag = false;
+                    else editorPreserveOriginalSizeFlag = null;
+                    updatePreserveSizeBtnUI();
                 };
             }
 
@@ -3227,11 +3243,20 @@
 
             moveSelect.addEventListener('mousedown', () => {
                 if (moveSelect.options.length > 1) return;
-                allProjectFolders.forEach(proj => {
-                    if (proj.path !== projectPath && !proj.path.includes('\\')) {
+
+                // Sort folders: Projects first, then others, alphabetically
+                const sortedFolders = [...allProjectFolders].sort((a, b) => {
+                    if (a.isProject !== b.isProject) return a.isProject ? -1 : 1;
+                    return a.path.localeCompare(b.path);
+                });
+
+                sortedFolders.forEach(proj => {
+                    if (proj.path !== projectPath) {
                         const opt = document.createElement('option');
                         opt.value = proj.path;
-                        opt.textContent = (proj.isProject ? "" : "📁 ") + proj.name;
+                        // Use path for the label if it's nested
+                        const label = proj.path || proj.name || '(Root)';
+                        opt.textContent = (proj.isProject ? "" : "📁 ") + label;
                         moveSelect.appendChild(opt);
                     }
                 });
@@ -3784,12 +3809,12 @@
                 '        }',
                 '        \$finalTW = \$maxScaledW',
                 '    } else {',
-                '        # When OFF, we swap dimensions if any segment is rotated 90/270',$
-                '        \$anyRotated = \$false',$
+                '        # When OFF, we swap dimensions if any segment is rotated 90/270',
+                '        \$anyRotated = \$false',
                 '        foreach (\$s in \$segments) {',
-                '            if (\$s.rotation -eq 90 -or \$s.rotation -eq 270) { \$anyRotated = \$true; break }',$
+                '            if (\$s.rotation -eq 90 -or \$s.rotation -eq 270) { \$anyRotated = \$true; break }',
                 '        }',
-                '        if (\$anyRotated) { \$finalTW = \$sh; \$finalTH = \$sw }',$
+                '        if (\$anyRotated) { \$finalTW = \$sh; \$finalTH = \$sw }',
                 '        else { \$finalTW = \$sw; \$finalTH = \$sh }',
                 '    }',
                 '    \$finalTW = [Math]::Ceiling(\$finalTW / 2) * 2',
@@ -4064,7 +4089,7 @@
                 const editRotationChanged = sel.editRotation && sel.editRotation !== "0";
                 const editFlippedChanged = !!sel.editFlipped;
                 
-                const needsProcessing = (hasCuts || markersChanged || editRotationChanged || editFlippedChanged || sel.crop || (sel.preserveOriginalSize !== undefined && sel.preserveOriginalSize !== null)) && sel.editModeRotated;
+                const needsProcessing = (hasCuts || markersChanged || editRotationChanged || editFlippedChanged || sel.crop || (sel.preserveOriginalSize !== undefined && sel.preserveOriginalSize !== null) || (sel.backupOriginal)) && sel.editModeRotated;
 
                 const rotationChanged = sel.rotation !== initialRot;
                 const flippedChanged = !!sel.flipped !== initialFlipped;
@@ -5116,8 +5141,6 @@
                         projectRows.push({ rowDiv, videoFile, files, initialShortcutType: '', hasProjectSc, hasRootSc, rootScEntry });
                     }
 
-                    if (projectRows.length === 0) continue;
-
                     const groupHeader = document.createElement('h2');
                     groupHeader.className = 'project-header';
                     const groupHeaderText = document.createElement('span');
@@ -5138,6 +5161,13 @@
                     }
                     canvasElements.push(groupHeader);
 
+                    if (projectRows.length === 0) {
+                        if (!isShortcutsOnly && !isNewOnly) {
+                            canvases.set(canvasId, { id: canvasId, name: project.name, elements: canvasElements, path: project.path });
+                        }
+                        continue;
+                    }
+
                     for (const rowData of projectRows) {
                         const { rowDiv, videoFile, files, hasProjectSc, hasRootSc, rootScEntry } = rowData;
 
@@ -5148,7 +5178,7 @@
                         rowDiv.appendChild(dateInfo);
 
                         let multiplierInput;
-                        if (currentMode === 'playlist-root') {
+                        if (currentMode === 'playlist-root' || currentMode === 'update-playlist-root') {
                             const navContainer = document.createElement('div');
                             navContainer.className = 'playlist-nav-container';
                             rowDiv.appendChild(navContainer);
@@ -5171,6 +5201,10 @@
                         thumbnailsContainer.className = 'thumbnails-container';
                         rowDiv.appendChild(thumbnailsContainer);
 
+                        const rotData = projectRotationData.get(videoFile.name.toLowerCase()) || { rotation: "0", flipped: false };
+                        const rotation = rotData.rotation;
+                        const flipped = rotData.flipped;
+
                         thumbnailsContainer.addEventListener('click', (e) => {
                             if (e.target === thumbnailsContainer) {
                                 const key = project.path + '|' + videoFile.name;
@@ -5191,10 +5225,6 @@
                             else if (hasProjectSc) initialShortcutType = 'subfolder-sc';
                             else if (hasRootSc) initialShortcutType = 'root-sc';
                         }
-
-                        const rotData = projectRotationData.get(videoFile.name.toLowerCase()) || { rotation: "0", flipped: false };
-                        const rotation = rotData.rotation;
-                        const flipped = rotData.flipped;
 
                         const key = project.path + '|' + videoFile.name;
                         const loadedEditState = editModeRotatedVideos.get(key);
@@ -5735,6 +5765,9 @@
                     rowDiv.dataset.projectPath = project.path;
                     rowDiv.dataset.projectName = project.name;
 
+                    let currentIndex = parseInt(localStorage.getItem(`playlist-thumb-index-${project.path}`)) || 0;
+                    if (currentIndex >= candidateVideos.length) currentIndex = 0;
+
                     rowDiv.appendChild(createRowActionBar('Playlist Item', project.path, candidateVideos[currentIndex].subfolder, rowDiv, project.name));
 
                     const navContainer = document.createElement('div');
@@ -5772,9 +5805,6 @@
                     rowDiv.appendChild(thumbnailsContainer);
 
                     canvasElements.push(rowDiv);
-
-                    let currentIndex = parseInt(localStorage.getItem(`playlist-thumb-index-${project.path}`)) || 0;
-                    if (currentIndex >= candidateVideos.length) currentIndex = 0;
 
                     const projectRotationData = await getRotationData(project.handle);
 
