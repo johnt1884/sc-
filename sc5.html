@@ -5296,7 +5296,7 @@
                             if (!initialShortcutSelections.has(key)) {
                                 initialShortcutSelections.set(key, { 
                                     type: initialShortcutType, rotation: rotation, flipped: flipped, 
-                                    subfolder: videoFile.subfolder, projectName: project.name 
+                                    subfolder: videoFile.subfolder, projectPath: project.path, projectName: project.name
                                 });
                             }
                         }
@@ -5486,7 +5486,7 @@
                                     });
                                     initialShortcutSelections.set(key, { 
                                         type: 'subfolder-sc', rotation: rotation, flipped: flipped, 
-                                        subfolder: '', projectName: subfolderName 
+                                        subfolder: '', projectPath: subfolderName, projectName: subfolderName
                                     });
                                 }
                             }
