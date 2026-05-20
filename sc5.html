@@ -28,6 +28,7 @@
             --shortcut-bg-color: #008000;
             --selection-tint-color: #ffffff;
             --selection-opacity: 0.4;
+            --shortcut-opacity: 0.4;
         }
         html, body {
             height: 100%;
@@ -192,8 +193,7 @@
         .thumbnail-wrapper.selected-subfolder-sc::after,
         .thumbnail-wrapper.selected-both-sc::after,
         .thumbnail-wrapper.selected-delete-sc::after,
-        .thumbnail-wrapper.selected-playlist-sc::after,
-        .thumbnail-wrapper.selected-shortcut::after {
+        .thumbnail-wrapper.selected-playlist-sc::after {
             content: '';
             position: absolute;
             top: 0;
@@ -201,6 +201,18 @@
             right: 0;
             bottom: 0;
             opacity: var(--selection-opacity);
+            pointer-events: none;
+            z-index: 5;
+            border-radius: 6px;
+        }
+        .thumbnail-wrapper.selected-shortcut::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            opacity: var(--shortcut-opacity);
             pointer-events: none;
             z-index: 5;
             border-radius: 6px;
@@ -317,6 +329,8 @@
             box-sizing: border-box;
             border-bottom: 1px solid #444444;
             border-top: 1px solid #444444;
+            flex-wrap: nowrap;
+            overflow: hidden;
         }
         .row-action-bar.selected-for-categories {
             outline: 3px solid var(--selected-cat-color);
@@ -326,6 +340,7 @@
             display: flex;
             align-items: center;
             gap: 4px;
+            flex-shrink: 0;
         }
         .row-action-group-right {
             display: flex;
@@ -334,6 +349,7 @@
             flex-grow: 1;
             justify-content: flex-end;
             margin-left: 10px;
+            min-width: 0;
         }
         .delete-cross {
             font-size: 1.4em;
@@ -542,6 +558,7 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            min-width: 0;
         }
         .dropdown-content {
             display: none;
@@ -881,6 +898,10 @@
                                 <label for="selection-opacity-slider">Selection Opacity</label>
                                 <input type="range" id="selection-opacity-slider" min="0" max="1" step="0.05" value="0.4">
                             </div>
+                            <div class="options-row">
+                                <label for="shortcut-opacity-slider">Shortcut Overlay Opacity</label>
+                                <input type="range" id="shortcut-opacity-slider" min="0" max="1" step="0.05" value="0.4">
+                            </div>
                             <button id="revert-defaults-btn" style="width: 100%; text-align: center; border-top: 1px solid #ccc; font-weight: bold;">Revert to Default Colors</button>
                         </div>
                     </div>
@@ -1020,6 +1041,7 @@
                             <button id="editor-deleteEditThumbsBtn" class="bar-button" style="border-color:#f44336">Delete Thumbnails</button>
                             <button id="editor-preserveSizeBtn" class="bar-button" style="border-color:#009dff">Preserve Size</button>
                             <button id="editor-backupOriginalBtn" class="bar-button" style="border-color:#ff00ff">Backup Original</button>
+                            <button id="editor-resetBtn" class="bar-button" style="border-color:#f44336">Reset</button>
                             <button id="editor-commitBtn" class="editor-greenBtn">Commit</button>
                         </div>
                         <div class="editor-control-group" style="justify-content:flex-end">
@@ -1027,9 +1049,6 @@
                         </div>
                     </div>
                     <div id="editor-cutsListContainer"></div>
-                    <div style="width:98%; display:flex; justify-content: flex-end; margin-top: 10px; gap: 10px;">
-                        <button id="editor-resetBtn" class="bar-button" style="border-color:#f44336">Reset</button>
-                    </div>
                 </div>
             </div>
         </div>
@@ -1169,21 +1188,20 @@
             const state = editorPreserveOriginalSizeFlag; // null, true, or false
             const globalOn = preserveOriginalSizeGlobalCheckbox.checked;
 
+            editorPreserveSizeBtn.textContent = 'Preserve Size';
+
             if (state === null) {
                 editorPreserveSizeBtn.classList.remove('active');
                 editorPreserveSizeBtn.style.backgroundColor = 'rgba(150, 150, 150, 0.3)';
                 editorPreserveSizeBtn.title = `Preserve Original Size: Default (${globalOn ? 'ON' : 'OFF'})`;
-                editorPreserveSizeBtn.textContent = 'Preserve Size (D)';
             } else if (state === true) {
                 editorPreserveSizeBtn.classList.add('active');
                 editorPreserveSizeBtn.style.backgroundColor = 'rgba(0, 157, 255, 0.6)';
                 editorPreserveSizeBtn.title = 'Preserve Original Size: ON (Override)';
-                editorPreserveSizeBtn.textContent = 'Preserve Size (ON)';
             } else {
                 editorPreserveSizeBtn.classList.add('active');
                 editorPreserveSizeBtn.style.backgroundColor = 'rgba(244, 67, 54, 0.6)';
                 editorPreserveSizeBtn.title = 'Preserve Original Size: OFF (Override)';
-                editorPreserveSizeBtn.textContent = 'Preserve Size (OFF)';
             }
         }
 
@@ -2448,6 +2466,7 @@
             };
 
             const selectionOpacitySlider = document.getElementById('selection-opacity-slider');
+            const shortcutOpacitySlider = document.getElementById('shortcut-opacity-slider');
             const uniformBgCheckbox = document.getElementById('uniform-selection-bg-checkbox');
 
             // Load saved colors
@@ -2485,6 +2504,19 @@
                     const val = e.target.value;
                     document.documentElement.style.setProperty('--selection-opacity', val);
                     localStorage.setItem('sc-selection-opacity', val);
+                });
+            }
+
+            if (shortcutOpacitySlider) {
+                const saved = localStorage.getItem('sc-shortcut-opacity');
+                if (saved) {
+                    shortcutOpacitySlider.value = saved;
+                    document.documentElement.style.setProperty('--shortcut-opacity', saved);
+                }
+                shortcutOpacitySlider.addEventListener('input', (e) => {
+                    const val = e.target.value;
+                    document.documentElement.style.setProperty('--shortcut-opacity', val);
+                    localStorage.setItem('sc-shortcut-opacity', val);
                 });
             }
 
@@ -2528,6 +2560,11 @@
                         selectionOpacitySlider.value = 0.4;
                         document.documentElement.style.setProperty('--selection-opacity', 0.4);
                         localStorage.setItem('sc-selection-opacity', 0.4);
+                    }
+                    if (shortcutOpacitySlider) {
+                        shortcutOpacitySlider.value = 0.4;
+                        document.documentElement.style.setProperty('--shortcut-opacity', 0.4);
+                        localStorage.setItem('sc-shortcut-opacity', 0.4);
                     }
                     if (uniformBgCheckbox) {
                         uniformBgCheckbox.checked = false;
@@ -3134,7 +3171,7 @@
         }
         function createRowActionBar(videoName, projectPath, subfolder, rowDiv, projectName) {
             const bar = document.createElement("div"); bar.className = "row-action-bar";
-            const leftGroup = document.createElement("div");
+            const leftGroup = document.createElement("div"); leftGroup.className = "row-action-group-left";
 
             const createBtn = (text, onClick, type = null, color = null) => {
                 const btn = document.createElement('button');
@@ -3754,13 +3791,14 @@
                 '    # Get video info',
                 '    \$duration = (ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 -i "\$sourcePath") -as [double]',
                 '    \$metadata = (ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=s=x:p=0 -i "\$sourcePath") -split "x"',
+                '    if (\$metadata.Count -lt 2) { Write-Host "Could not get video dimensions for \$sourcePath" -ForegroundColor Red; return }',
                 '    \$sw = [int]\$metadata[0]',
                 '    \$sh = [int]\$metadata[1]',
                 '    ',
-                '    # Detect source rotation metadata',
+                '    # Detect source rotation metadata (tags or side data)',
                 '    \$srcRot = 0',
-                '    \$rotMeta = (ffprobe -v error -select_streams v:0 -show_entries stream_tags=rotate -of default=noprint_wrappers=1:nokey=1 -i "\$sourcePath")',
-                '    if (\$rotMeta) { \$srcRot = [int]\$rotMeta % 360 }',
+                '    \$rotMeta = (ffprobe -v error -select_streams v:0 -show_entries "stream_tags=rotate:stream_side_data=rotation" -of default=noprint_wrappers=1:nokey=1 -i "\$sourcePath") | Where-Object { \$_ } | Select-Object -First 1',
+                '    if (\$rotMeta) { \$srcRot = (([int]\$rotMeta % 360) + 360) % 360 }',
                 '    ',
                 '    # Define segments based on timestamp events for VFR stability',
                 '    \$points = @(0, \$duration)',
@@ -3786,8 +3824,7 @@
                 '        \$tw = 0; \$th = 0',
                 '        if (\$crop) { ',
                 '            \$cp = \$crop -split ":"',
-                '            \$cw = [int]\$cp[0]; \$ch = [int]\$cp[1]',
-                '            if (\$totalRot -eq 90 -or \$totalRot -eq 270) { \$tw = \$ch; \$th = \$cw } else { \$tw = \$cw; \$th = \$ch }',
+                '            \$tw = [int]\$cp[0]; \$th = [int]\$cp[1]',
                 '        } else {',
                 '            if (\$totalRot -eq 90 -or \$totalRot -eq 270) { \$tw = \$sh; \$th = \$sw } else { \$tw = \$sw; \$th = \$sh }',
                 '        }',
@@ -3837,9 +3874,9 @@
                 '        elseif (\$s.rotation -eq 270) { \$transpose = ",transpose=2" }',
                 '        ',
                 '        \$flip = if (\$flipped) { ",hflip" } else { "" }',
-                '        \$cropFilter = if (\$crop) { ",crop=\$crop" } else { "" }',
+                '        \$cropFilter = if (\$crop) { "crop=\$crop," } else { "" }',
                 '        ',
-                '        \$vFilters += "[0:v]trim=start=${vStart}:end=${vEnd},setpts=PTS-STARTPTS\$transpose\$flip\$cropFilter,scale=w=${finalTW}:h=${finalTH}:force_original_aspect_ratio=decrease,pad=${finalTW}:${finalTH}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p[v$i]"',
+                '        \$vFilters += "[0:v]trim=start=${vStart}:end=${vEnd},setpts=PTS-STARTPTS,\$cropFilter${transpose}\$flip,scale=w=${finalTW}:h=${finalTH}:force_original_aspect_ratio=decrease,pad=${finalTW}:${finalTH}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p[v$i]"',
                 '        if (\$hasAudio) {',
                 '            \$aFilters += "[0:a]atrim=start=${vStart}:end=${vEnd},asetpts=PTS-STARTPTS[a$i]"',
                 '        }',
@@ -3858,7 +3895,7 @@
                 '    ',
                 '    Write-Host "  > Encoding with filter_complex..."',
                 '    \$mapArgs = if (\$hasAudio) { @("-map", "[v]", "-map", "[a]") } else { @("-map", "[v]") }',
-                '    ffmpeg -y -noautorotate -i "\$sourcePath" -filter_complex \"\$(Get-Content -LiteralPath \$filterPath -Raw)\" @mapArgs -c:v libx264 -crf 17 -preset veryslow -pix_fmt yuv420p -c:a aac -b:a 192k -metadata:s:v rotate=0 -movflags +faststart "\$targetPath"',
+                '    ffmpeg -y -noautorotate -i "\$sourcePath" -filter_complex \"\$(Get-Content -LiteralPath \$filterPath -Raw)\" @mapArgs -c:v libx264 -crf 17 -preset slow -pix_fmt yuv420p -c:a aac -b:a 192k -metadata:s:v rotate=0 -movflags +faststart "\$targetPath"',
                 '    Remove-Item -LiteralPath "\$tempDir" -Recurse -Force',
                 '}',
                 '',
