@@ -2229,7 +2229,10 @@
 
             [editorRotLeftBtn, editorRot180Btn, editorRotRightBtn].forEach(b => {
                 b.onclick = () => {
-                    const d = b.id === 'editor-rotLeft' ? 270 : b.id === 'editor-rot180' ? 180 : 90;
+                    let d = b.id === 'editor-rotLeft' ? 270 : b.id === 'editor-rot180' ? 180 : 90;
+                    if (editorCurrentAppliedFlip && d !== 180) {
+                        d = (360 - d) % 360;
+                    }
                     const frame = Math.floor(editorMainVideo.currentTime * editorEstimatedFPS + 0.001);
                     const snapTime = frame / editorEstimatedFPS;
                     const currentRot = editorGetRotationAt(snapTime);
@@ -3205,8 +3208,14 @@
                     selection = { videoName, projectPath, subfolder, projectName, type: '', rotation: "0", flipped: false };
                     shortcutSelections.set(key, selection);
                 }
+
+                let effectiveDelta = delta;
+                if (selection.flipped && delta !== 180) {
+                    effectiveDelta = -delta;
+                }
+
                 let currentRot = parseInt(selection.rotation || "0");
-                let newRot = (currentRot + delta + 360) % 360;
+                let newRot = (currentRot + effectiveDelta + 360) % 360;
                 selection.rotation = newRot.toString();
                 
                 // Main page buttons now perform "hard" edits
