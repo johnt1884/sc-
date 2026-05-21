@@ -1158,7 +1158,7 @@
 
         let allVideoFiles = [];
         let allProjectFolders = [];
-        const skipDirs = new Set(['edit thumbnails', 'thumbnails', 'sc', '.git', 'node_modules', 'recovery', '$recycle.bin', 'system volume information']);
+        const skipDirs = new Set(['edit thumbnails', 'thumbnails', 'sc', '.git', 'node_modules', 'recovery', '$recycle.bin', 'system volume information', 'originals']);
         let shortcutSelections = new Map(); // Key: projectPath + '|' + videoName, Value: { videoName, projectPath, subfolder, type, rotation }
         let initialShortcutSelections = new Map(); // Key: projectPath + '|' + videoName, Value: { type, rotation }
         let currentDirHandle;
@@ -3307,14 +3307,16 @@
                 // Sort folders: Projects first, then others, alphabetically
                 const sortedFolders = [...allProjectFolders].sort((a, b) => {
                     if (a.isProject !== b.isProject) return a.isProject ? -1 : 1;
-                    return a.path.localeCompare(b.path);
+                    return (a.path || "").localeCompare(b.path || "");
                 });
 
                 sortedFolders.forEach(proj => {
-                    if (proj.path !== projectPath) {
+                    // Filter: 1. Don't show the current project.
+                    //         2. Only show top-level folders relative to the root (no backslashes).
+                    const isTopLevel = !proj.path || !proj.path.includes('\\');
+                    if (proj.path !== projectPath && isTopLevel) {
                         const opt = document.createElement('option');
                         opt.value = proj.path;
-                        // Use path for the label if it's nested
                         const label = proj.path || proj.name || '(Root)';
                         opt.textContent = (proj.isProject ? "" : "📁 ") + label;
                         moveSelect.appendChild(opt);
@@ -3962,6 +3964,18 @@
                 '    }',
                 '}',
                 '',
+                'Add-Type -AssemblyName Microsoft.VisualBasic',
+                'function Send-ToRecycleBin {',
+                '    param([string]\$path)',
+                '    if (Test-Path -LiteralPath \$path) {',
+                '        if ([System.IO.Directory]::Exists(\$path)) {',
+                '            [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory(\$path, "OnlyErrorDialogs", "SendToRecycleBin")',
+                '        } else {',
+                '            [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile(\$path, "OnlyErrorDialogs", "SendToRecycleBin")',
+                '        }',
+                '    }',
+                '}',
+                '',
                 'function Manage-Shortcut {',
                 '    param([string]\$folderPath, [string]\$videoName, [string]\$targetPath, [bool]$shouldExist)',
                 '    if (-not \$folderPath) { return }',
@@ -3976,8 +3990,8 @@
                 '    ',
                 '    if (-not $shouldExist) {',
                 '        foreach (\$file in \$existing) {',
-                '            Remove-Item -LiteralPath \$file.FullName -Force',
-                '            Write-Host "Removed obsolete shortcut: \$(\$file.Name)" -ForegroundColor Yellow',
+                '            Write-Host "Recycling obsolete shortcut: \$(\$file.Name)" -ForegroundColor Yellow',
+                '            Send-ToRecycleBin -path \$file.FullName',
                 '        }',
                 '        return',
                 '    }',
@@ -3990,26 +4004,26 @@
                 '            if ([System.IO.Path]::GetFullPath(\$sc.TargetPath).TrimEnd(\"\\\") -eq \$targetPath.TrimEnd(\"\\\")) {',
                 '                if (-not \$foundCorrect) {',
                 '                    if (\$file.FullName -ne $primaryPath) {',
-                '                        if (Test-Path -LiteralPath $primaryPath) { Remove-Item -LiteralPath $primaryPath -Force }',
+                '                        if (Test-Path -LiteralPath $primaryPath) { Send-ToRecycleBin -path $primaryPath }',
                 '                        Move-Item -LiteralPath \$file.FullName -Destination $primaryPath -Force',
                 '                        Write-Host "Standardized shortcut name: $primaryPath" -ForegroundColor Gray',
                 '                    }',
                 '                    \$foundCorrect = \$true',
                 '                } else {',
-                '                    Remove-Item -LiteralPath \$file.FullName -Force',
-                '                    Write-Host "Removed duplicate shortcut: \$(\$file.FullName)" -ForegroundColor Gray',
+                '                    Write-Host "Recycling duplicate shortcut: \$(\$file.FullName)" -ForegroundColor Gray',
+                '                    Send-ToRecycleBin -path \$file.FullName',
                 '                }',
                 '            } else {',
-                '                Remove-Item -LiteralPath \$file.FullName -Force',
-                '                Write-Host "Removed incorrect shortcut: \$(\$file.FullName)" -ForegroundColor Gray',
+                '                Write-Host "Recycling incorrect shortcut: \$(\$file.FullName)" -ForegroundColor Gray',
+                '                Send-ToRecycleBin -path \$file.FullName',
                 '            }',
                 '        } catch {',
-                '            Remove-Item -LiteralPath \$file.FullName -Force',
+                '            Send-ToRecycleBin -path \$file.FullName',
                 '        }',
                 '    }',
                 '    if (-not \$foundCorrect) {',
                 '        try {',
-                '            if (Test-Path -LiteralPath $primaryPath) { Remove-Item -LiteralPath $primaryPath -Force }',
+                '            if (Test-Path -LiteralPath $primaryPath) { Send-ToRecycleBin -path $primaryPath }',
                 '            \$sc = \$wshell.CreateShortcut($primaryPath)',
                 '            \$sc.TargetPath = \$targetPath',
                 '            \$sc.Save()',
@@ -4224,7 +4238,7 @@
                         scriptLines.push(`        \$backupPath = (Join-Path -Path \$backupDir -ChildPath '${escapedVideoName}')`);
                         scriptLines.push(`        if (-not (Test-Path -LiteralPath \$backupPath)) { Copy-Item -LiteralPath \"\$sourceVideoPath\" -Destination \$backupPath; Write-Host "Backed up original to: Originals\\${escapedVideoName}" }`);
                     }
-                    scriptLines.push(`        if (Test-Path -LiteralPath \"\$sourceVideoPath\") { Remove-Item -LiteralPath \"\$sourceVideoPath\" -Force }`);
+                    scriptLines.push(`        if (Test-Path -LiteralPath \"\$sourceVideoPath\") { Send-ToRecycleBin -path \"\$sourceVideoPath\" }`);
                     scriptLines.push(`        Move-Item -LiteralPath \"\$processedVideoPath\" -Destination \"\$sourceVideoPath\" -Force`);
                     scriptLines.push(`        Write-Host "Applied edits to: ${escapedVideoName}"`);
                     scriptLines.push(`    }`);
@@ -4236,17 +4250,17 @@
                 let targetPathConstruction = `(Join-Path -Path (${targetBaseRes}) -ChildPath '${escapedVideoName}')`;
 
                 if (sel.deleteEditThumbnails) {
-                    summaryActions.thumb_cleanup.push(`${sel.videoName}: Delete Thumbnails`);
+                    summaryActions.thumb_cleanup.push(`${sel.videoName}: Recycling Thumbnails`);
                     const thumbBase = sel.videoName.substring(0, sel.videoName.lastIndexOf('.'));
                     const escapedThumbBase = escapePSString(thumbBase);
                     const projRes = getPSPathRes('\$BaseDir', sel.projectPath, sel.projectName, '');
-                    scriptLines.push(`    # Deleting Thumbnails for: ${sel.videoName}`);
+                    scriptLines.push(`    # Recycling Thumbnails for: ${sel.videoName}`);
                     scriptLines.push(`    \$thumbDirs = @('Thumbnails', 'Edit Thumbnails')`);
                     scriptLines.push(`    foreach (\$dirName in \$thumbDirs) {`);
                     scriptLines.push(`        \$dirPath = (Join-Path -Path ${projRes} -ChildPath \$dirName)`);
                     scriptLines.push(`        if (Test-Path -LiteralPath \$dirPath) {`);
-                    scriptLines.push(`            Get-ChildItem -LiteralPath \$dirPath | Where-Object { \$_.Name -like '${escapedThumbBase}_*' -or \$_.BaseName -eq '${escapedThumbBase}' } | Remove-Item -Force`);
-                    scriptLines.push(`            Write-Host "Deleted thumbnails in \$dirName for: ${escapedVideoName}"`);
+                    scriptLines.push(`            Get-ChildItem -LiteralPath \$dirPath | Where-Object { \$_.Name -like '${escapedThumbBase}_*' -or \$_.BaseName -eq '${escapedThumbBase}' } | ForEach-Object { Send-ToRecycleBin -path \$_.FullName }`);
+                    scriptLines.push(`            Write-Host "Recycled thumbnails in \$dirName for: ${escapedVideoName}"`);
                     scriptLines.push(`        }`);
                     scriptLines.push(`    }`);
                 }
@@ -4298,12 +4312,12 @@
             // --- File Deletions (Videos and Thumbnails) ---
             const fileDeletions = selectionsToProcess.filter(sel => sel.type === 'delete-sc');
             if (fileDeletions.length > 0) {
-                scriptLines.push('# --- Deleting Videos and Thumbnails ---');
+                scriptLines.push('# --- Recycling Videos and Thumbnails ---');
                 fileDeletions.forEach(sel => {
                     const key = sel.projectPath + '|' + sel.videoName;
                     const initial = initialShortcutSelections.get(key);
 
-                    summaryActions.file_delete.push(`${sel.videoName} (Permanent Delete)`);
+                    summaryActions.file_delete.push(`${sel.videoName} (Recycle)`);
                     if (initial && initial.type) {
                         summaryActions.shortcuts_delete.push(`${sel.videoName} (Associated Shortcuts)`);
                     }
@@ -4314,8 +4328,8 @@
                     scriptLines.push(`\$videoPath = (Join-Path -Path (${res}) -ChildPath '${escapedVideoName}')`);
                     
                     scriptLines.push('if (Test-Path -LiteralPath \"$videoPath\") {');
-                    scriptLines.push('    Remove-Item -LiteralPath \"$videoPath\" -Force');
-                    scriptLines.push(`    Write-Host "Deleted video: ${escapedVideoName}"`);
+                    scriptLines.push('    Send-ToRecycleBin -path \"$videoPath\"');
+                    scriptLines.push(`    Write-Host "Recycled video: ${escapedVideoName}"`);
                     scriptLines.push('}');
                     
                     const thumbBase = sel.videoName.substring(0, sel.videoName.lastIndexOf('.'));
@@ -4327,8 +4341,8 @@
                     scriptLines.push(`foreach (\$dirName in \$thumbDirs) {`);
                     scriptLines.push(`    \$dirPath = (Join-Path -Path \"\$projectPath\" -ChildPath \$dirName)`);
                     scriptLines.push(`    if (Test-Path -LiteralPath \"$dirPath\") {`);
-                    scriptLines.push(`        Get-ChildItem -LiteralPath \"$dirPath\" | Where-Object { \$_.Name -like '${escapedThumbBase}_*' -or \$_.BaseName -eq '${escapedThumbBase}' } | Remove-Item -Force`);
-                    scriptLines.push(`        Write-Host "Deleted thumbnails for ${escapedVideoName} in \$dirName"`);
+                    scriptLines.push(`        Get-ChildItem -LiteralPath \"$dirPath\" | Where-Object { \$_.Name -like '${escapedThumbBase}_*' -or \$_.BaseName -eq '${escapedThumbBase}' } | ForEach-Object { Send-ToRecycleBin -path \$_.FullName }`);
+                    scriptLines.push(`        Write-Host "Recycled thumbnails for ${escapedVideoName} in \$dirName"`);
                     scriptLines.push(`    }`);
                     scriptLines.push(`}`);
 
@@ -4364,12 +4378,12 @@
 
                 const initiallyInSubfolder = initial.type === 'subfolder-sc' || initial.type === 'both-sc';
                 if (initiallyInSubfolder) {
-                    summaryActions.shortcuts_delete.push(`${videoName} from ${initial.projectPath}/sc/`);
+                    summaryActions.shortcuts_delete.push(`${videoName} from ${initial.projectPath || '(Unknown)'}/sc/`);
                     const subPathRes = getPSPathRes('\$BaseDir', initial.projectPath, initial.projectName, '');
                     let subPath = `Join-Path -Path (${subPathRes}) -ChildPath 'sc'`;
                     const fullScPath = `Join-Path -Path (${subPath}) -ChildPath ('${escapedVideoName}' + '.lnk')`;
                     const logPath = (escapedProjectPath ? escapedProjectPath + '\\' : '') + (escapedSubfolder ? escapedSubfolder + '\\' : '') + escapedVideoName;
-                    deletions.push(`if (Test-Path -LiteralPath (${fullScPath})) { Remove-Item -LiteralPath (${fullScPath}); Write-Host "Deleted subfolder shortcut: ${logPath}" }`);
+                    deletions.push(`if (Test-Path -LiteralPath (${fullScPath})) { Send-ToRecycleBin -path (${fullScPath}); Write-Host "Recycled subfolder shortcut: ${logPath}" }`);
                 }
 
                 const initiallyInRoot = initial.type === 'root-sc' || initial.type === 'both-sc';
@@ -4377,12 +4391,12 @@
                     summaryActions.shortcuts_delete.push(`${videoName} from Root sc/`);
                     const rootScFolder = `Join-Path -Path \"$BaseDir\" -ChildPath 'sc'`;
                     const fullScPath = `Join-Path -Path (${rootScFolder}) -ChildPath ('${escapedVideoName}' + '.lnk')`;
-                    deletions.push(`if (Test-Path -LiteralPath (${fullScPath})) { Remove-Item -LiteralPath (${fullScPath}); Write-Host "Deleted root shortcut: ${escapedVideoName}" }`);
+                    deletions.push(`if (Test-Path -LiteralPath (${fullScPath})) { Send-ToRecycleBin -path (${fullScPath}); Write-Host "Recycled root shortcut: ${escapedVideoName}" }`);
                 }
             });
 
             if (deletions.length > 0) {
-                scriptLines.push('# --- Deleting Shortcuts ---');
+                scriptLines.push('# --- Recycling Shortcuts ---');
                 scriptLines.push(...deletions);
                 scriptLines.push('');
             }
@@ -5681,7 +5695,7 @@
 
             if (g_rootHandle) {
                 const rootDiscoveredFolders = [];
-                async function scanRootFolders(dirHandle, currentPath = '', findProjects = true) {
+                async function scanRootFolders(dirHandle, currentPath = '', findProjects = true, insideProject = false) {
                     let isProject = false;
                     try {
                         await findDirectoryHandleByName(dirHandle, 'Edit Thumbnails');
@@ -5692,21 +5706,22 @@
                         handle: dirHandle,
                         path: currentPath,
                         name: dirHandle.name,
-                        isProject: isProject
+                        isProject: isProject,
+                        insideProject: insideProject
                     });
 
                     if (isProject && findProjects) {
                         for await (const entry of dirHandle.values()) {
                             if (entry.kind === 'directory' && !skipDirs.has(entry.name.toLowerCase())) {
                                 const newPath = currentPath ? `${currentPath}\\${entry.name}` : entry.name;
-                                await scanRootFolders(entry, newPath, false);
+                                await scanRootFolders(entry, newPath, false, true);
                             }
                         }
                     } else {
                         for await (const entry of dirHandle.values()) {
                             if (entry.kind === 'directory' && !skipDirs.has(entry.name.toLowerCase())) {
                                 const newPath = currentPath ? `${currentPath}\\${entry.name}` : entry.name;
-                                await scanRootFolders(entry, newPath, findProjects);
+                                await scanRootFolders(entry, newPath, findProjects, insideProject);
                             }
                         }
                     }
