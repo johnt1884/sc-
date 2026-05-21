@@ -895,11 +895,11 @@
                                 <input type="color" id="selection-tint-color-picker" value="#ffffff">
                             </div>
                             <div class="options-row">
-                                <label for="selection-opacity-slider">Selection Opacity</label>
+                                <label for="selection-opacity-slider">Selection Opacity (<span id="selection-opacity-val">40</span>%)</label>
                                 <input type="range" id="selection-opacity-slider" min="0" max="1" step="0.05" value="0.4">
                             </div>
                             <div class="options-row">
-                                <label for="shortcut-opacity-slider">Shortcut Overlay Opacity</label>
+                                <label for="shortcut-opacity-slider">Shortcut Overlay Opacity (<span id="shortcut-opacity-val">40</span>%)</label>
                                 <input type="range" id="shortcut-opacity-slider" min="0" max="1" step="0.05" value="0.4">
                             </div>
                             <button id="revert-defaults-btn" style="width: 100%; text-align: center; border-top: 1px solid #ccc; font-weight: bold;">Revert to Default Colors</button>
@@ -2498,28 +2498,36 @@
             });
 
             if (selectionOpacitySlider) {
+                const valLabel = document.getElementById('selection-opacity-val');
+                const updateLabel = (v) => { if (valLabel) valLabel.textContent = Math.round(v * 100); };
                 const saved = localStorage.getItem('sc-selection-opacity');
                 if (saved) {
                     selectionOpacitySlider.value = saved;
                     document.documentElement.style.setProperty('--selection-opacity', saved);
+                    updateLabel(saved);
                 }
                 selectionOpacitySlider.addEventListener('input', (e) => {
                     const val = e.target.value;
                     document.documentElement.style.setProperty('--selection-opacity', val);
                     localStorage.setItem('sc-selection-opacity', val);
+                    updateLabel(val);
                 });
             }
 
             if (shortcutOpacitySlider) {
+                const valLabel = document.getElementById('shortcut-opacity-val');
+                const updateLabel = (v) => { if (valLabel) valLabel.textContent = Math.round(v * 100); };
                 const saved = localStorage.getItem('sc-shortcut-opacity');
                 if (saved) {
                     shortcutOpacitySlider.value = saved;
                     document.documentElement.style.setProperty('--shortcut-opacity', saved);
+                    updateLabel(saved);
                 }
                 shortcutOpacitySlider.addEventListener('input', (e) => {
                     const val = e.target.value;
                     document.documentElement.style.setProperty('--shortcut-opacity', val);
                     localStorage.setItem('sc-shortcut-opacity', val);
+                    updateLabel(val);
                 });
             }
 
@@ -2563,11 +2571,15 @@
                         selectionOpacitySlider.value = 0.4;
                         document.documentElement.style.setProperty('--selection-opacity', 0.4);
                         localStorage.setItem('sc-selection-opacity', 0.4);
+                        const lbl = document.getElementById('selection-opacity-val');
+                        if (lbl) lbl.textContent = "40";
                     }
                     if (shortcutOpacitySlider) {
                         shortcutOpacitySlider.value = 0.4;
                         document.documentElement.style.setProperty('--shortcut-opacity', 0.4);
                         localStorage.setItem('sc-shortcut-opacity', 0.4);
+                        const lbl = document.getElementById('shortcut-opacity-val');
+                        if (lbl) lbl.textContent = "40";
                     }
                     if (uniformBgCheckbox) {
                         uniformBgCheckbox.checked = false;
