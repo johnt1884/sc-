@@ -571,6 +571,8 @@
             left: 0;
             border: 1px solid #444;
             color: white;
+            max-height: 90vh;
+            overflow-y: auto;
         }
         .dropdown-content button {
             color: white;
@@ -4850,7 +4852,7 @@
             const projectFolders = [];
             const allDiscoveredFolders = [];
 
-            async function scanFolders(dirHandle, currentPath = '', findProjects = true) {
+            async function scanFolders(dirHandle, currentPath = '', findProjects = true, insideProject = false) {
                 let isProject = false;
                 try {
                     await findDirectoryHandleByName(dirHandle, 'Edit Thumbnails');
@@ -4861,7 +4863,8 @@
                     handle: dirHandle,
                     path: currentPath,
                     name: dirHandle.name,
-                    isProject: isProject
+                    isProject: isProject,
+                    insideProject: insideProject
                 });
 
                 if (isProject && findProjects) {
@@ -4881,14 +4884,14 @@
                     for await (const entry of dirHandle.values()) {
                         if (entry.kind === 'directory' && !skipDirs.has(entry.name.toLowerCase())) {
                             const newPath = currentPath ? `${currentPath}\\${entry.name}` : entry.name;
-                            await scanFolders(entry, newPath, false);
+                            await scanFolders(entry, newPath, false, true);
                         }
                     }
                 } else {
                     for await (const entry of dirHandle.values()) {
                         if (entry.kind === 'directory' && !skipDirs.has(entry.name.toLowerCase())) {
                             const newPath = currentPath ? `${currentPath}\\${entry.name}` : entry.name;
-                            await scanFolders(entry, newPath, findProjects);
+                            await scanFolders(entry, newPath, findProjects, insideProject);
                         }
                     }
                 }
@@ -4994,7 +4997,7 @@
             allProjectFolders = [...allDiscoveredFolders];
             if (g_rootHandle && g_rootHandle !== currentDirHandle) {
                 const rootDiscoveredFolders = [];
-                async function scanRootFolders(dirHandle, currentPath = '', findProjects = true) {
+                async function scanRootFolders(dirHandle, currentPath = '', findProjects = true, insideProject = false) {
                     let isProject = false;
                     try {
                         await findDirectoryHandleByName(dirHandle, 'Edit Thumbnails');
@@ -5005,21 +5008,22 @@
                         handle: dirHandle,
                         path: currentPath,
                         name: dirHandle.name,
-                        isProject: isProject
+                        isProject: isProject,
+                        insideProject: insideProject
                     });
 
                     if (isProject && findProjects) {
                         for await (const entry of dirHandle.values()) {
                             if (entry.kind === 'directory' && !skipDirs.has(entry.name.toLowerCase())) {
                                 const newPath = currentPath ? `${currentPath}\\${entry.name}` : entry.name;
-                                await scanRootFolders(entry, newPath, false);
+                                await scanRootFolders(entry, newPath, false, true);
                             }
                         }
                     } else {
                         for await (const entry of dirHandle.values()) {
                             if (entry.kind === 'directory' && !skipDirs.has(entry.name.toLowerCase())) {
                                 const newPath = currentPath ? `${currentPath}\\${entry.name}` : entry.name;
-                                await scanRootFolders(entry, newPath, findProjects);
+                                await scanRootFolders(entry, newPath, findProjects, insideProject);
                             }
                         }
                     }
@@ -5635,7 +5639,7 @@
             const projectFolders = [];
             const allDiscoveredFolders = [];
 
-            async function scanFolders(dirHandle, currentPath = '', findProjects = true) {
+            async function scanFolders(dirHandle, currentPath = '', findProjects = true, insideProject = false) {
                 let isProject = false;
                 try {
                     await findDirectoryHandleByName(dirHandle, 'Edit Thumbnails');
@@ -5646,7 +5650,8 @@
                     handle: dirHandle,
                     path: currentPath,
                     name: dirHandle.name,
-                    isProject: isProject
+                    isProject: isProject,
+                    insideProject: insideProject
                 });
 
                 if (isProject && findProjects) {
@@ -5659,14 +5664,14 @@
                     for await (const entry of dirHandle.values()) {
                         if (entry.kind === 'directory' && !skipDirs.has(entry.name.toLowerCase())) {
                             const newPath = currentPath ? `${currentPath}\\${entry.name}` : entry.name;
-                            await scanFolders(entry, newPath, false);
+                            await scanFolders(entry, newPath, false, true);
                         }
                     }
                 } else {
                     for await (const entry of dirHandle.values()) {
                         if (entry.kind === 'directory' && !skipDirs.has(entry.name.toLowerCase())) {
                             const newPath = currentPath ? `${currentPath}\\${entry.name}` : entry.name;
-                            await scanFolders(entry, newPath, findProjects);
+                            await scanFolders(entry, newPath, findProjects, insideProject);
                         }
                     }
                 }
